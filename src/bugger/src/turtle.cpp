@@ -8,8 +8,8 @@
 /**
  * This tutorial demonstrates simple sending of messages over the ROS system.
  */
-ros::Publisher motors_publisher_;
-ros::Publisher velocity_publisher_;
+ros::Publisher motorPublisher;
+ros::Publisher velocityPublisher;
 geometry_msgs::Twist cmd;
 kobuki_msgs::MotorPower msg_motor;
 void forward(float dist);
@@ -29,9 +29,9 @@ int main(int argc, char **argv)
    */
    	ros::NodeHandle n;
 	motors_publisher_ = n.advertise<kobuki_msgs::MotorPower>("/mobile_base/commands/motor_power", 1);
-    velocity_publisher_ = n.advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 1);
+    velocityPublisher = n.advertise<geometry_msgs::Twist>("/mobile_base/commands/velocity", 1);
     msg_motor.state = 1;
-    motors_publisher_.publish(msg_motor); //enable engine!
+    motorPublisher.publish(msg_motor); //enable engine!
 	//Chat Conversation End
     //forward(2.0);
     ros::Subscriber sub = n.subscribe<sensor_msgs::LaserScan>("/scan",1000,processLaserScan);
