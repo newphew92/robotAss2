@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 2.8.3)
-project(overhead)
+project(bugger)
 
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
@@ -101,7 +101,7 @@ find_package(catkin REQUIRED COMPONENTS
 ## DEPENDS: system dependencies of this project that dependent projects also need
 catkin_package(
 #  INCLUDE_DIRS include
-#  LIBRARIES overhead
+#  LIBRARIES bugger
 #  CATKIN_DEPENDS roscpp rospy std_msgs
 #  DEPENDS system_lib
 )
@@ -117,34 +117,34 @@ include_directories(
   ${catkin_INCLUDE_DIRS}
 )
 
-add_executable(turtle src/turtle.cpp)
-target_link_libraries(turtle ${catkin_LIBRARIES})
-add_dependencies(turtle overhead)
 ## Declare a C++ library
-# add_library(overhead
-#   src/${PROJECT_NAME}/overhead.cpp
+# add_library(bugger
+#   src/${PROJECT_NAME}/bugger.cpp
 # )
 
 ## Add cmake target dependencies of the library
 ## as an example, code may need to be generated before libraries
 ## either from message generation or dynamic reconfigure
-# add_dependencies(overhead ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# add_dependencies(bugger ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Declare a C++ executable
-# add_executable(overhead_node src/overhead_node.cpp)
+# add_executable(bugger_node src/bugger_node.cpp)
 
 ## Add cmake target dependencies of the executable
 ## same as for the library above
-# add_dependencies(overhead_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+# add_dependencies(bugger_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 
 ## Specify libraries to link a library or executable target against
-# target_link_libraries(overhead_node
+# target_link_libraries(bugger_node
 #   ${catkin_LIBRARIES}
 # )
 
 #############
 ## Install ##
 #############
+add_executable(turtle src/turtle.cpp)
+target_link_libraries(turtle ${catkin_LIBRARIES})
+add_dependencies(turtle bugger)
 
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
@@ -157,7 +157,7 @@ add_dependencies(turtle overhead)
 # )
 
 ## Mark executables and/or libraries for installation
-# install(TARGETS overhead overhead_node
+# install(TARGETS bugger bugger_node
 #   ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 #   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
@@ -182,7 +182,7 @@ add_dependencies(turtle overhead)
 #############
 
 ## Add gtest based cpp test target and link libraries
-# catkin_add_gtest(${PROJECT_NAME}-test test/test_overhead.cpp)
+# catkin_add_gtest(${PROJECT_NAME}-test test/test_bugger.cpp)
 # if(TARGET ${PROJECT_NAME}-test)
 #   target_link_libraries(${PROJECT_NAME}-test ${PROJECT_NAME})
 # endif()
