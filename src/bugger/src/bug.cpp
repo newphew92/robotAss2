@@ -9,25 +9,27 @@
 #include <geometry_msgs/Pose.h>
 // #include <cmath>
 #include <math.h>
-// Global vars
+// ==================================Global vars===================================================
 const double PI = 3.1416;
 ros::Publisher motorPublisher;
 ros::Publisher velocityPublisher;
 ros::Publisher positionPublisher;
-
 ros::Publisher posePublisher;
-
 geometry_msgs::Twist cmd;
 geometry_msgs::Pose robotPose;
 gazebo_msgs::ModelStates modeller;
 kobuki_msgs::MotorPower msgMotor;
-
+// ===================================function declarations =======================================
 double goalX=1;
 double goalY=1;
-bool hasParam;
 void getPos(const gazebo_msgs::ModelStates& modelStates);
 void forward(float dist);
 double* quaternionToEuler(double x, double y, double z, double w);
+double getAbsoluteTargetAngle (double orgX, double orgY, double goalX, double goalY);
+bool isonMLine(float destX, float destY, float orgX, float orgY);
+void faceTarget(double goalAngle, double orgAngle);
+double toRad (double x);
+// ================================================================================================
 int main(int argc, char **argv)
 {
   //initialize the node and name it
@@ -52,18 +54,18 @@ void getPos(const gazebo_msgs::ModelStates& modelStates){
   float posX = modelStates.pose[2].position.x;
   float posY = modelStates.pose[2].position.y;
   float posZ = modelStates.pose[2].position.z;
-
   double quatX = modelStates.pose[2].orientation.x;
   double quatY = modelStates.pose[2].orientation.y;
   double quatZ = modelStates.pose[2].orientation.z;
   double quatW = modelStates.pose[2].orientation.w;
-
+  double absAngle = getAbsoluteTargetAngle(posX, posY, goalX, goalY);
   double* eulerized = quaternionToEuler(quatX, quatY, quatZ, quatW);
 
+  faceTarget(absAngle, toRad(eulerized[2]));
   // printf("X: %f and Y: %f\n", goalX, goalY);
   printf("Position: %f, %f, %f \n Orientation: %f, %f, %f, %f\n Euler: %f, %f, %f\n",posX, posY, posZ,quatX, quatY, quatZ, quatW, eulerized[0], eulerized[1], eulerized[2]);
 
-  forward(0.5);
+  // forward(0.5);
 }
 void forward(float dist)
 {
@@ -73,12 +75,21 @@ void forward(float dist)
 }
 
 bool isonMLine(float destX, float destY, float orgX, float orgY){
-  if (orgX >= (destX-0.1) && orgX <= (destX+0.1) && orgY >= (destY-0.1) && orgY <= (destY+0.1) ){
-    return true;
-  }
-  else{
-    return false;
-  }
+  return ((orgX >= (destX-0.1) && orgX <= (destX+0.1) && orgY >= (destY-0.1) && orgY <= (destY+0.1) ) ? true: false);
+}
+// get target's angle from turtlebot based on world axis
+double getAbsoluteTargetAngle (double orgX, double orgY, double goalX, double goalY){
+  acos(toRad((goalY-orgY)/(goalX-orgX)));
+}
+void faceTarget(double goalAngle, double orgAngle){
+  cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
+  cmd.angular.z = (goalAngle-orgAngle);
+  printf("%f\n", goalAngle-orgAngle);
+  velocityPublisher.publish(cmd);
+}
+
+double toRad (double x){
+  return 2*PI * (x / 360);
 }
 
 double* quaternionToEuler(double x, double y, double z, double w){
@@ -86,20 +97,14 @@ double* quaternionToEuler(double x, double y, double z, double w){
     double sqx = x*x;
     double sqy = y*y;
     double sqz = z*z;
-    double eulerZ;
-    double eulerX;
-    double eulerY;
     double* pointer;
     // double eulerPoints [3];
     pointer = new double [3];
-    eulerZ = (atan2(2.0 * (x*y + z*w),(sqx - sqy - sqz + sqw)) * (180.0f/PI));
-    eulerX = (atan2(2.0 * (y*z + x*w),(-sqx - sqy + sqz + sqw)) * (180.0f/PI));
-    eulerY = (asin(-2.0 * (x*z - y*w)) * (180.0f/PI));
-    pointer[0] = eulerX;
-    pointer[1] = eulerY;
-    pointer[2] = eulerZ;
-    printf("Euler: %f, %f, %f\n", eulerX, eulerY, eulerZ);
-    printf("Euler2: %f, %f, %f\n", pointer[0], pointer[1], pointer[2]);
+    pointer[2] = (atan2(2.0 * (x*y + z*w),(sqx - sqy - sqz + sqw)) * (180.0f/PI));
+    pointer[0] = (atan2(2.0 * (y*z + x*w),(-sqx - sqy + sqz + sqw)) * (180.0f/PI));
+    pointer[1] = (asin(-2.0 * (x*z - y*w)) * (180.0f/PI));
+    // printf("Euler: %f, %f, %f\n", eulerX, eulerY, eulerZ);
+    // printf("Euler2: %f, %f, %f\n", pointer[0], pointer[1], pointer[2]);
     return pointer;
 }
 // void goToTarget(float destX, float destY){
