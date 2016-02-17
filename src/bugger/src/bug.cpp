@@ -9,6 +9,7 @@
 #include <geometry_msgs/Pose.h>
 // #include <cmath>
 #include <math.h>
+#include <time.h>
 // ==================================Global vars===================================================
 const double PI = 3.1416;
 ros::Publisher motorPublisher;
@@ -22,13 +23,22 @@ kobuki_msgs::MotorPower msgMotor;
 // ===================================function declarations =======================================
 double goalX=1;
 double goalY=1;
+bool haveStart = false;
+double startX;
+double startY;
+double turning = false; //delete this later
 void getPos(const gazebo_msgs::ModelStates& modelStates);
 void forward(float dist);
 double* quaternionToEuler(double x, double y, double z, double w);
 double getAbsoluteTargetAngle (double orgX, double orgY, double goalX, double goalY);
-bool isonMLine(float destX, float destY, float orgX, float orgY);
+bool isOnMLine( float orgX, float orgY);
 void faceTarget(double goalAngle, double orgAngle);
+void goToGoal(float destX, float destY, float orgX, float orgY);
+void pathPlanner(float destX, float destY, float orgX, float orgY, double goalAngle, double orgAngle);
 double toRad (double x);
+void wallRun();
+enum PlanningPhase { SLINE, WALL };
+float closestPoint;//temp value
 // ================================================================================================
 int main(int argc, char **argv)
 {
@@ -51,45 +61,83 @@ int main(int argc, char **argv)
 }
 void getPos(const gazebo_msgs::ModelStates& modelStates){
   // ROS_INFO("Pos x hand hue", modelStates.pose[0].position.x);
-  float posX = modelStates.pose[2].position.x;
-  float posY = modelStates.pose[2].position.y;
-  float posZ = modelStates.pose[2].position.z;
-  double quatX = modelStates.pose[2].orientation.x;
-  double quatY = modelStates.pose[2].orientation.y;
-  double quatZ = modelStates.pose[2].orientation.z;
-  double quatW = modelStates.pose[2].orientation.w;
+  float posX = modelStates.pose[2].position.x;float posY = modelStates.pose[2].position.y;float posZ = modelStates.pose[2].position.z;
+  double quatX = modelStates.pose[2].orientation.x;double quatY = modelStates.pose[2].orientation.y;double quatZ = modelStates.pose[2].orientation.z;double quatW = modelStates.pose[2].orientation.w;
   double absAngle = getAbsoluteTargetAngle(posX, posY, goalX, goalY);
-  double* eulerized = quaternionToEuler(quatX, quatY, quatZ, quatW);
-
-  faceTarget(absAngle, toRad(eulerized[2]));
+  double* eulerized = quaternionToEuler(quatX, quatY, quatZ, quatW);//get angle of self relative to world
+  if (!haveStart){
+    startX = posX; startY = posY; haveStart=true;
+  }
+  // faceTarget(absAngle, toRad(eulerized[2]));
+  // printf("StartX: %f and StartY: %f\n", startX, startY);
   // printf("X: %f and Y: %f\n", goalX, goalY);
-  printf("Position: %f, %f, %f \n Orientation: %f, %f, %f, %f\n Euler: %f, %f, %f\n",posX, posY, posZ,quatX, quatY, quatZ, quatW, eulerized[0], eulerized[1], eulerized[2]);
-
+  printf("Position: %f, %f Start: %f, %f Goal: %f, %f\n", posX, posY, startX, startY, goalX, goalY);
+  printf("Goal is at %f degrees and self is oriented at %f degrees\n", absAngle, toRad(eulerized[2]));
+  // printf("Position: %f, %f, %f \n Orientation: %f, %f, %f, %f\n Euler: %f, %f, %f\n",posX, posY, posZ,quatX, quatY, quatZ, quatW, eulerized[0], eulerized[1], eulerized[2]);
+  pathPlanner(goalX, goalY, posX, posY, absAngle, toRad(eulerized[2]));
   // forward(0.5);
 }
 void forward(float dist)
 {
-  cmd.linear.x = dist;
   cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
+  cmd.linear.x = dist;
   velocityPublisher.publish(cmd);
 }
 
-bool isonMLine(float destX, float destY, float orgX, float orgY){
-  return ((orgX >= (destX-0.1) && orgX <= (destX+0.1) && orgY >= (destY-0.1) && orgY <= (destY+0.1) ) ? true: false);
+void goToGoal(float destX, float destY, float orgX, float orgY){
+  cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
+  cmd.linear.y = (destY-orgY)/20;
+  cmd.linear.x = (destX-orgX)/20;
+  velocityPublisher.publish(cmd);
+}
+
+
+bool isOnMLine(float orgX, float orgY){
+  double a = (goalY-startY)/(goalX-startX);
+  double b = goalY - a*goalX;
+  return ((orgY >=  (a*orgX-0.1+b)&& orgY <= (a*orgX+0.1+b)) ? true: false);
 }
 // get target's angle from turtlebot based on world axis
-double getAbsoluteTargetAngle (double orgX, double orgY, double goalX, double goalY){
-  acos(toRad((goalY-orgY)/(goalX-orgX)));
+double getAbsoluteTargetAngle (double orgX, double orgY, double destX, double destY){
+  // printf("dest X: %f Y: %f ", destX, destY);
+  // printf("Abs Target Angle: %f \n", angleInRadians);
+  return (atan2(destY-orgY, destX-orgX));
+  // double h = sqrt((destY-orgY)*(destY-orgY)+(destX-orgX)*(destX-orgX));
+  // return acos(toRad((destY-orgY)/h));
 }
 void faceTarget(double goalAngle, double orgAngle){
-  cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
-  cmd.angular.z = (goalAngle-orgAngle);
-  printf("%f\n", goalAngle-orgAngle);
-  velocityPublisher.publish(cmd);
+  // while(start< stopTime)
+	// {
+    cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
+    cmd.angular.z = (goalAngle-orgAngle);
+    printf("%f\n", goalAngle-orgAngle);
+    velocityPublisher.publish(cmd);
+    start = clock();
+    // ros::Duration(0.25).sleep();
+  // }
 }
 
 double toRad (double x){
   return 2*PI * (x / 360);
+}
+
+void pathPlanner(float destX, float destY, float orgX, float orgY,double goalAngle, double orgAngle){
+  if (isOnMLine(orgX, orgY)){
+    faceTarget(goalAngle, orgAngle);
+    printf("On M line\n");
+    // temp check, change this
+  //   if (!turning){
+    // goToGoal(destX, destY, orgX, orgY);
+  // }
+  //    (closestPoint<=0.5) ? wallRun() :goToGoal(destX, destY, orgX, orgY);
+  }
+  else{
+    // wallRun();
+    // forward(0.5);
+  }
+}
+
+void wallRun(){//TODO
 }
 
 double* quaternionToEuler(double x, double y, double z, double w){
