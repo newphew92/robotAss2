@@ -20,13 +20,15 @@ geometry_msgs::Twist cmd;
 geometry_msgs::Pose robotPose;
 gazebo_msgs::ModelStates modeller;
 kobuki_msgs::MotorPower msgMotor;
-// ===================================function declarations =======================================
-double goalX=1;
-double goalY=1;
+double goalX;
+double goalY;
 bool haveStart = false;
 double startX;
 double startY;
 double turning = false; //delete this later
+enum PlanningPhase { SLINE, WALL };
+float closestPoint;//temp value
+// ===================================function declarations =======================================
 void getPos(const gazebo_msgs::ModelStates& modelStates);
 void forward(float dist);
 double* quaternionToEuler(double x, double y, double z, double w);
@@ -37,8 +39,7 @@ void goToGoal(float destX, float destY, float orgX, float orgY);
 void pathPlanner(float destX, float destY, float orgX, float orgY, double goalAngle, double orgAngle);
 double toRad (double x);
 void wallRun();
-enum PlanningPhase { SLINE, WALL };
-float closestPoint;//temp value
+void turn (float rad);
 // ================================================================================================
 int main(int argc, char **argv)
 {
@@ -60,102 +61,104 @@ int main(int argc, char **argv)
   ros::spin();
 }
 void getPos(const gazebo_msgs::ModelStates& modelStates){
-  // ROS_INFO("Pos x hand hue", modelStates.pose[0].position.x);
+  //get bot coords and orientation
   float posX = modelStates.pose[2].position.x;float posY = modelStates.pose[2].position.y;float posZ = modelStates.pose[2].position.z;
   double quatX = modelStates.pose[2].orientation.x;double quatY = modelStates.pose[2].orientation.y;double quatZ = modelStates.pose[2].orientation.z;double quatW = modelStates.pose[2].orientation.w;
   double absAngle = getAbsoluteTargetAngle(posX, posY, goalX, goalY);
   double* eulerized = quaternionToEuler(quatX, quatY, quatZ, quatW);//get angle of self relative to world
+  //save the starting point
   if (!haveStart){
     startX = posX; startY = posY; haveStart=true;
   }
-  // faceTarget(absAngle, toRad(eulerized[2]));
-  // printf("StartX: %f and StartY: %f\n", startX, startY);
-  // printf("X: %f and Y: %f\n", goalX, goalY);
-  printf("Position: %f, %f Start: %f, %f Goal: %f, %f\n", posX, posY, startX, startY, goalX, goalY);
-  printf("Goal is at %f degrees and self is oriented at %f degrees\n", absAngle, toRad(eulerized[2]));
-  // printf("Position: %f, %f, %f \n Orientation: %f, %f, %f, %f\n Euler: %f, %f, %f\n",posX, posY, posZ,quatX, quatY, quatZ, quatW, eulerized[0], eulerized[1], eulerized[2]);
   pathPlanner(goalX, goalY, posX, posY, absAngle, toRad(eulerized[2]));
-  // forward(0.5);
-}
-void forward(float dist)
-{
-  cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
-  cmd.linear.x = dist;
-  velocityPublisher.publish(cmd);
-}
-
-void goToGoal(float destX, float destY, float orgX, float orgY){
-  cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
-  cmd.linear.y = (destY-orgY)/20;
-  cmd.linear.x = (destX-orgX)/20;
-  velocityPublisher.publish(cmd);
+  // printf("Position: %f, %f Start: %f, %f Goal: %f, %f\n", posX, posY, startX, startY, goalX, goalY);
+  // printf("Goal is at %f degrees and self is oriented at %f degrees\n", absAngle, toRad(eulerized[2]));
+  // printf("Position: %f, %f, %f \n Orientation: %f, %f, %f, %f\n Euler: %f, %f, %f\n",posX, posY, posZ,quatX, quatY, quatZ, quatW, eulerized[0], eulerized[1], eulerized[2]);
 }
 
 
-bool isOnMLine(float orgX, float orgY){
-  double a = (goalY-startY)/(goalX-startX);
-  double b = goalY - a*goalX;
-  return ((orgY >=  (a*orgX-0.1+b)&& orgY <= (a*orgX+0.1+b)) ? true: false);
-}
-// get target's angle from turtlebot based on world axis
-double getAbsoluteTargetAngle (double orgX, double orgY, double destX, double destY){
-  // printf("dest X: %f Y: %f ", destX, destY);
-  // printf("Abs Target Angle: %f \n", angleInRadians);
-  return (atan2(destY-orgY, destX-orgX));
-  // double h = sqrt((destY-orgY)*(destY-orgY)+(destX-orgX)*(destX-orgX));
-  // return acos(toRad((destY-orgY)/h));
-}
+
+
+
 void faceTarget(double goalAngle, double orgAngle){
-  // while(start< stopTime)
-	// {
+  double angleToTurn = goalAngle-orgAngle;
+  int slice =7;
+  while(angleToTurn > 0.1){
     cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
-    cmd.angular.z = (goalAngle-orgAngle);
-    printf("%f\n", goalAngle-orgAngle);
+    cmd.angular.z = (angleToTurn/slice);
+    // printf("%f\n", goalAngle-orgAngle);
     velocityPublisher.publish(cmd);
-    start = clock();
-    // ros::Duration(0.25).sleep();
-  // }
+    angleToTurn-=(angleToTurn/slice);
+  }
 }
 
-double toRad (double x){
-  return 2*PI * (x / 360);
-}
+
 
 void pathPlanner(float destX, float destY, float orgX, float orgY,double goalAngle, double orgAngle){
   if (isOnMLine(orgX, orgY)){
-    faceTarget(goalAngle, orgAngle);
     printf("On M line\n");
+    if (abs(goalAngle-orgAngle)<0.01){
+      goToGoal(destX, destY, orgX, orgY);
+      // forward(1);
+    }
+    else {
+      // turn(0.5);
+      faceTarget(goalAngle, orgAngle);
+    }
+    // faceTarget(goalAngle, orgAngle);
     // temp check, change this
   //   if (!turning){
     // goToGoal(destX, destY, orgX, orgY);
   // }
   //    (closestPoint<=0.5) ? wallRun() :goToGoal(destX, destY, orgX, orgY);
   }
-  else{
+  // else{
     // wallRun();
     // forward(0.5);
-  }
+  // }
 }
 
 void wallRun(){//TODO
 }
-
+//go towards the goal. It's not relative to the bot but since it's only called when you're on the M line, it doesn't matter
+void goToGoal(float destX, float destY, float orgX, float orgY){
+  cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
+  cmd.linear.y = (destY-orgY)/10;
+  cmd.linear.x = (destX-orgX)/10;
+  velocityPublisher.publish(cmd);
+}
+// get target's angle from turtlebot based on world axis
+double getAbsoluteTargetAngle (double orgX, double orgY, double destX, double destY){
+  return (atan2(destY-orgY, destX-orgX));
+}
+//check if on M line
+bool isOnMLine(float orgX, float orgY){
+  double a = (goalY-startY)/(goalX-startX);
+  double b = goalY - a*goalX;
+  return ((orgY >=  (a*orgX-1+b)&& orgY <= (a*orgX+1+b)) ? true: false);
+}
 double* quaternionToEuler(double x, double y, double z, double w){
     double sqw = w*w;
     double sqx = x*x;
     double sqy = y*y;
     double sqz = z*z;
     double* pointer;
-    // double eulerPoints [3];
     pointer = new double [3];
     pointer[2] = (atan2(2.0 * (x*y + z*w),(sqx - sqy - sqz + sqw)) * (180.0f/PI));
     pointer[0] = (atan2(2.0 * (y*z + x*w),(-sqx - sqy + sqz + sqw)) * (180.0f/PI));
     pointer[1] = (asin(-2.0 * (x*z - y*w)) * (180.0f/PI));
-    // printf("Euler: %f, %f, %f\n", eulerX, eulerY, eulerZ);
-    // printf("Euler2: %f, %f, %f\n", pointer[0], pointer[1], pointer[2]);
     return pointer;
 }
-// void goToTarget(float destX, float destY){
-//
-//   cmd.linear.x
-// }
+void forward(float dist){
+  cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;cmd.linear.x = dist;
+  velocityPublisher.publish(cmd);
+}
+void turn(float rad)
+{
+  cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
+  cmd.angular.z = rad;
+  velocityPublisher.publish(cmd);
+}
+double toRad (double x){
+  return 2*PI * (x / 360);
+}
