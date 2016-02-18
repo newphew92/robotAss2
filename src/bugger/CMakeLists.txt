@@ -146,6 +146,10 @@ add_executable(turtle src/turtle.cpp)
 target_link_libraries(turtle ${catkin_LIBRARIES})
 add_dependencies(turtle bugger)
 
+add_executable(bug src/bug.cpp)
+target_link_libraries(bug ${catkin_LIBRARIES})
+add_dependencies(bug bugger)
+
 # all install targets should use catkin DESTINATION variables
 # See http://ros.org/doc/api/catkin/html/adv_user_guide/variables.html
 
