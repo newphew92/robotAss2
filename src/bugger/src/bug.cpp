@@ -82,14 +82,14 @@ void getPos(const gazebo_msgs::ModelStates& modelStates){
 
 void faceTarget(double goalAngle, double orgAngle){
   double angleToTurn = goalAngle-orgAngle;
-  int slice =7;
-  while(angleToTurn > 0.1){
+  int slice =1;
+  // while(angleToTurn > 0.1){
     cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
     cmd.angular.z = (angleToTurn/slice);
     // printf("%f\n", goalAngle-orgAngle);
     velocityPublisher.publish(cmd);
-    angleToTurn-=(angleToTurn/slice);
-  }
+    // angleToTurn-=(angleToTurn/slice);
+  // }
 }
 
 
@@ -98,11 +98,13 @@ void pathPlanner(float destX, float destY, float orgX, float orgY,double goalAng
   if (isOnMLine(orgX, orgY)){
     printf("On M line\n");
     if (abs(goalAngle-orgAngle)<0.01){
+      faceTarget(goalAngle, orgAngle);
       goToGoal(destX, destY, orgX, orgY);
-      // forward(1);
+      printf("going\n" );
     }
     else {
       // turn(0.5);
+      printf("looking\n" );
       faceTarget(goalAngle, orgAngle);
     }
     // faceTarget(goalAngle, orgAngle);
