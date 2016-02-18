@@ -30,7 +30,6 @@ double posX;
 double posY;
 double absAngle;
 double* eulerized;
-double turning = false; //delete this later
 enum PlanningPhase { MLINE, WALL, CORNER };
 char* phaseString[] = { "MLINE", "WALL", "CORNER" };
 enum CornerSubPhase { MOVE, TURN, ADJUST };
