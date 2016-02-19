@@ -68,7 +68,7 @@ void mLineStateManage();
 void cornerStateManage();
 std::tr1::tuple<float, int> getNearestPointAndDirection();
 void smoothen();
-
+double lastX; double lastY;//hue
 // ================================================================================================
 int main(int argc, char **argv){
   //initialize the node and name it
@@ -113,15 +113,18 @@ void getPos(const gazebo_msgs::ModelStates& modelStates){
 void pathPlanner(){
   switch(state){
     case MLINE:
+    printf("MLINE\n");
       mLineStateManage();
       break;
 
     case CORNER:
+    printf("CORNER\n");
       cornerStateManage();
       break;
 
     case WALL:
     default:
+    printf("WALL\n");
       wallStateManage();
       break;
   }
@@ -134,28 +137,31 @@ void mLineStateManage(){
   int side = std::tr1::get<1>(point);
   if(smallest > SAFEBOUND || smallest == 0) {
     faceTarget(absAngle, toRad(eulerized[2]));
-    ros::Duration(TURNBUFFER).sleep();
+    ros::Duration(1).sleep();
     if (isOnMLine(posX, posY)){
+      lastX = posX; lastY = posY;//store into lastX and lastY until we leave hue
       printf("On M line\n");
       if (abs(absAngle-toRad(eulerized[2]))<0.01){
-        goToGoal(goalX, goalY, startX, startY);
+        forward(1);//hue turns out gotogoal is totally useless
+        // goToGoal(goalX, goalY, startX, startY);
         printf("going\n" );
       }
       else {
         printf("looking\n" );
         faceTarget(absAngle, toRad(eulerized[2]));
+        ros::Duration(1).sleep();
       }
     }
     else{
       printf("Not on M line\n" );
       faceTarget(absAngle, toRad(eulerized[2]));
+      ros::Duration(1).sleep();
       forward(1);
     }
   }
   else if(smallest > BUFFERSPACE) {
+    printf("switch to wall");
     state = WALL;
-
-    // Pick a side to put the wall and change the phase
     if(side == MIDDLE) {
       if(simplifiedScan[LEFT] < simplifiedScan[RIGHT]){
         sideWithWall = LEFT;
@@ -198,6 +204,10 @@ void cornerStateManage(){
   }
 }
 void wallStateManage(){
+  if (isOnMLine(posX, posY) && !(abs(lastX-posX)< 0.1 && abs(lastY-posY)<0.1) && !(abs(posX-startX)< 0.1 && abs(posY-startY)<0.1)){
+    printf("get MLINE instead");
+    state = MLINE; //hue
+  }
   if(simplifiedScan[MIDDLE] < BUFFERSPACE){
     turnAway(TURNSPEED * 2);
   }
@@ -216,7 +226,6 @@ void wallStateManage(){
       ros::Duration(TURNBUFFER).sleep();
       forward(MOVESPEED/2);
     }
-    // Distance is just right
     else{
       forward(MOVESPEED);
     }
@@ -224,7 +233,7 @@ void wallStateManage(){
 }
 void faceTarget(double goalAngle, double orgAngle){
   double angleToTurn = goalAngle-orgAngle;
-  int slice =5;
+  int slice =1;
     cmd.linear.x = 0;cmd.linear.y = 0;cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;
     cmd.angular.z = (angleToTurn/slice);
     printf("Angle to turn %f\n", goalAngle-orgAngle);
@@ -281,8 +290,9 @@ void smoothen(){
 //go towards the goal. It's not relative to the bot but since it's only called when you're on the M line, it doesn't matter
 void goToGoal(float destX, float destY, float orgX, float orgY){
   cmd.linear.z = 0;cmd.angular.x = 0;cmd.angular.y = 0;cmd.angular.z = 0;
-  cmd.linear.y = (destY-orgY)/8;
-  cmd.linear.x = (destX-orgX)/8;
+  cmd.linear.y = abs((destY-posY)/sqrt((destY-posY)*(destY-posY)+(destX-posX)*(destX-posX))*1.2);
+  cmd.linear.x = abs((destX-posX)/sqrt((destY-posY)*(destY-posY)+(destX-posX)*(destX-posX))*1.2);//hue
+  printf("Velocity is x:%f y:%f \n", cmd.linear.x ,cmd.linear.y );
   velocityPublisher.publish(cmd);
 }
 // get target's angle from turtlebot based on world axis
