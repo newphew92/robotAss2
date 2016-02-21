@@ -42,7 +42,7 @@ int sideWithWall;
 float wallDistBuffer;
 const float MOVESPEED = 0.05;
 const float TURNSPEED  = 0.15;
-const float SAFEBOUND = 1.5;
+const float SAFEBOUND = 1.25;
 const float BUFFERSPACE = 0.75;
 const float CORNERBUFFER = 0.75;
 const float TURNBUFFER = 0.5;
@@ -69,6 +69,7 @@ void cornerStateManage();
 std::tr1::tuple<float, int> getNearestPointAndDirection();
 void smoothen();
 double lastX; double lastY;//hue
+double initCornerX; double initCornerY;
 // ================================================================================================
 int main(int argc, char **argv){
   //initialize the node and name it
@@ -185,18 +186,19 @@ void mLineStateManage(){
   }
 }
 void cornerStateManage(){
-    forward(0.4);
-    ros::Duration(1).sleep();
+    // forward(0.4);
+    // ros::Duration(1).sleep();
   if(cornerState == MOVE){
-    float boost_into_doorway_speed = 0.5;
-    turnAway(TURNSPEED * 2);
-    ros::Duration(TURNBUFFER).sleep();
+    float boost_into_doorway_speed = tan(PI/6*(SAFEBOUND+BUFFERSPACE)/2+0.1);
+    // turnAway(TURNSPEED * 2);
+    // ros::Duration(TURNBUFFER).sleep();
     forward(boost_into_doorway_speed);
     cornerState = TURN;
   }
   else if(cornerState == TURN){
     if(simplifiedScan[sideWithWall] < SAFEBOUND){
-      cornerState = ADJUST;
+      state = WALL;
+          cornerState = 0;
     }
     else{
       turnAway(-1 * TURNSPEED);
@@ -228,6 +230,8 @@ void wallStateManage(){
     if( abs(wallDistBuffer - wallDist) > CORNERBUFFER){
       state = CORNER;
       cornerState = MOVE;
+      initCornerX = posX;
+      initCornerY = posY;
     }
     else if(wallDist < BUFFERSPACE){
       turnAway(TURNSPEED);

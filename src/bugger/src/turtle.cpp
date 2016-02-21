@@ -26,7 +26,7 @@ ros::Publisher motorPublisher;
 ros::Publisher velocityPublisher;
 geometry_msgs::Twist cmd;
 kobuki_msgs::MotorPower Msg_motor;
-
+const double PI = 3.1416;
 const float MOVEMENTSPEED = 0.05;
 const float TURNSPEED  = 0.15;
 const float SAFEBOUND = 1.5;
@@ -182,16 +182,19 @@ void wallStateManage(){
 }
 
 void cornerStateManage(){
+    // forward(0.4);
+    // ros::Duration(1).sleep();
   if(cornerState == MOVE){
-    float boost_into_doorway_speed = 1.10;
-    turnAway(TURNSPEED * 2);
-    ros::Duration(PAUSETIME).sleep();
+    float boost_into_doorway_speed = tan(PI/6*(SAFEBOUND+BUFFERSPACE)/2+0.1);
+    // turnAway(TURNSPEED * 2);
+    // ros::Duration(TURNBUFFER).sleep();
     forward(boost_into_doorway_speed);
     cornerState = TURN;
   }
   else if(cornerState == TURN){
     if(simplifiedScan[sideWithWall] < SAFEBOUND){
-      cornerState = ADJUST;
+      state = WALL;
+          cornerState = 0;
     }
     else{
       turnAway(-1 * TURNSPEED);
