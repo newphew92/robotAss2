@@ -214,6 +214,8 @@ void wallStateManage(){
   && !(abs(posX-startX)< 0.05 && abs(posY-startY)<0.05)  && //not at start
   (sqrt((posX-goalX)*(posX-goalX)+(posY-goalY)*(posY-goalY)) < sqrt((lastX-goalX)*(lastX-goalX)+(lastY-goalY)*(lastY-goalY)))){ //if we are closer to goal than last time we were on line
     printf("get MLINE instead");
+    faceTarget(absAngle, toRad(eulerized[2]));
+    ros::Duration(1).sleep();
     state = MLINE; //hue
     return;
   }
