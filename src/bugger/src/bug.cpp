@@ -43,7 +43,7 @@ float wallDistBuffer;
 const float MOVESPEED = 0.05;
 const float TURNSPEED  = 0.15;
 const float SAFEBOUND = 1.5;
-const float BUFFERSPACE = 1;
+const float BUFFERSPACE = 0.75;
 const float CORNERBUFFER = 0.75;
 const float TURNBUFFER = 0.5;
 // ===================================function declarations =======================================
@@ -135,11 +135,12 @@ void mLineStateManage(){
   std::tr1::tuple<float, int> point = getNearestPointAndDirection();
   float smallest = std::tr1::get<0>(point);
   int side = std::tr1::get<1>(point);
+
   if(smallest > SAFEBOUND || smallest == 0) {
     faceTarget(absAngle, toRad(eulerized[2]));
     ros::Duration(1).sleep();
     if (isOnMLine(posX, posY)){
-      lastX = posX; lastY = posY;//store into lastX and lastY until we leave hue
+
       printf("On M line\n");
       if (abs(absAngle-toRad(eulerized[2]))<0.01){
         forward(1);//hue turns out gotogoal is totally useless
@@ -161,6 +162,7 @@ void mLineStateManage(){
   }
   else if(smallest > BUFFERSPACE) {
     printf("switch to wall");
+    lastX = posX; lastY = posY;//store into lastX and lastY until we leave hue
     state = WALL;
     if(side == MIDDLE) {
       if(simplifiedScan[LEFT] < simplifiedScan[RIGHT]){
@@ -183,8 +185,10 @@ void mLineStateManage(){
   }
 }
 void cornerStateManage(){
+    forward(0.4);
+    ros::Duration(1).sleep();
   if(cornerState == MOVE){
-    float boost_into_doorway_speed = 1.10;
+    float boost_into_doorway_speed = 0.5;
     turnAway(TURNSPEED * 2);
     ros::Duration(TURNBUFFER).sleep();
     forward(boost_into_doorway_speed);
@@ -203,10 +207,15 @@ void cornerStateManage(){
     cornerState = 0;
   }
 }
+
+
 void wallStateManage(){
-  if (isOnMLine(posX, posY) && !(abs(lastX-posX)< 0.1 && abs(lastY-posY)<0.1) && !(abs(posX-startX)< 0.1 && abs(posY-startY)<0.1)){
+  if (isOnMLine(posX, posY) && !(abs(lastX-posX)< 0.05 && abs(lastY-posY)<0.05) //on line and not the same position as the last time was on mline
+  && !(abs(posX-startX)< 0.05 && abs(posY-startY)<0.05)  && //not at start
+  (sqrt((posX-goalX)*(posX-goalX)+(posY-goalY)*(posY-goalY)) < sqrt((lastX-goalX)*(lastX-goalX)+(lastY-goalY)*(lastY-goalY)))){ //if we are closer to goal than last time we were on line
     printf("get MLINE instead");
     state = MLINE; //hue
+    return;
   }
   if(simplifiedScan[MIDDLE] < BUFFERSPACE){
     turnAway(TURNSPEED * 2);
