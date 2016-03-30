@@ -1,0 +1,10 @@
+(cl:defpackage aqua_gait-srv
+  (:use )
+  (:export
+   "UPDATETARGETRPYD"
+   "<UPDATETARGETRPYD-REQUEST>"
+   "UPDATETARGETRPYD-REQUEST"
+   "<UPDATETARGETRPYD-RESPONSE>"
+   "UPDATETARGETRPYD-RESPONSE"
+  ))
+

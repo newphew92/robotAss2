@@ -12,9 +12,6 @@ macro(_list_append_deduplicate listname)
   endif()
 endmacro()
 
-
-
-
 # append elements to a list if they are not already in the list
 # copied from catkin/cmake/list_append_unique.cmake to keep pkgConfig
 # self contained

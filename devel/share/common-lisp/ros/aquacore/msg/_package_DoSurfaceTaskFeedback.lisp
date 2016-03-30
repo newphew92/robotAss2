@@ -1,0 +1,10 @@
+(cl:in-package aquacore-msg)
+(cl:export '(TASK-VAL
+          TASK
+          PERCENT_DEPTH_CHANGE_COMPLETED-VAL
+          PERCENT_DEPTH_CHANGE_COMPLETED
+          HAS_REACHED_CONSTANT_DEPTH-VAL
+          HAS_REACHED_CONSTANT_DEPTH
+          HAS_ESTABLISHED_GPS-VAL
+          HAS_ESTABLISHED_GPS
+))
