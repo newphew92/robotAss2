@@ -10,7 +10,7 @@
 #define FORWARD_SWIM_SPEED_SCALING 0.1
 #define POSITION_GRAPHIC_RADIUS 20.0
 #define HEADING_GRAPHIC_LENGTH 50.0
-
+using namespace std;
 // Class Localizer is a sample stub that you can build upon for your implementation
 // (advised but optional: starting from scratch is also fine)
 //
@@ -51,7 +51,7 @@ public:
   }
 
     // Compare two images by getting the L2 error (square-root of sum of squared error).
-  double getSimilarity( const Mat A, const Mat B ) {
+  double getSimilarity( const cv::Mat A, const cv::Mat B ) {
   if ( A.rows > 0 && A.rows == B.rows && A.cols > 0 && A.cols == B.cols ) {
       // Calculate the L2 relative error between images.
       double errorL2 = norm( A, B, CV_L2 );
@@ -63,12 +63,13 @@ public:
       //Images have a different size
       return 100000000.0;  // Return a bad value
   }
-
+}
 
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )
   {
 
     cv::Mat rgb_img = cv_bridge::toCvShare(robot_img, "bgr8")->image;
+     cout << "R (default) = " << endl <<        rgb_img          << endl << endl;
     // TODO: You must fill in the code here to implement an observation model for your localizer
   }
 
