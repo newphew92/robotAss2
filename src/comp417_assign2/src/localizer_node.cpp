@@ -4,6 +4,7 @@
 #include <cv_bridge/cv_bridge.h>
 #include <geometry_msgs/PoseStamped.h>
 #include <tf/transform_listener.h>
+#include <opencv2/opencv.hpp>
 
 #define METRE_TO_PIXEL_SCALE 50
 #define FORWARD_SWIM_SPEED_SCALING 0.1
@@ -49,8 +50,25 @@ public:
 
   }
 
+    // Compare two images by getting the L2 error (square-root of sum of squared error).
+  double getSimilarity( const Mat A, const Mat B ) {
+  if ( A.rows > 0 && A.rows == B.rows && A.cols > 0 && A.cols == B.cols ) {
+      // Calculate the L2 relative error between images.
+      double errorL2 = norm( A, B, CV_L2 );
+      // Convert to a reasonable scale, since L2 error is summed across all pixels of the image.
+      double similarity = errorL2 / (double)( A.rows * A.cols );
+      return similarity;
+  }
+  else {
+      //Images have a different size
+      return 100000000.0;  // Return a bad value
+  }
+
+
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )
   {
+
+    cv::Mat rgb_img = cv_bridge::toCvShare(robot_img, "bgr8")->image;
     // TODO: You must fill in the code here to implement an observation model for your localizer
   }
 
@@ -91,7 +109,7 @@ public:
 
     // Comment the one following line to plot your whole trajectory without ground truth
     localization_result_image = ground_truth_image.clone();
-
+    //we need to get the estimated_robo_image right
     int estimated_robo_image_x = localization_result_image.size().width/2 + METRE_TO_PIXEL_SCALE * estimated_location.pose.position.x;
     int estimated_robo_image_y = localization_result_image.size().height/2 + METRE_TO_PIXEL_SCALE * estimated_location.pose.position.y;
 
