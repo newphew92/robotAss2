@@ -69,7 +69,17 @@ public:
   {
 
     cv::Mat rgb_img = cv_bridge::toCvShare(robot_img, "bgr8")->image;
-     cout << "R (default) = " << endl <<        rgb_img          << endl << endl;
+    //  cout << "R (default) = " << endl <<        rgb_img          << endl << endl;
+
+    cv::Size s = rgb_img.size();
+    int rows = s.height;
+    int cols = s.width;
+    //cv::Point* pt = new cv::Point(200,200);
+    //rgb_img.at(pt);
+    cv::Vec3b pixel = rgb_img.at<cv::Vec3b>(200,200);
+
+    printf("The RGB of the middle pixel is : (%d,%d,%d)\n", pixel[0],pixel[1],pixel[2]);
+
     // TODO: You must fill in the code here to implement an observation model for your localizer
   }
 
