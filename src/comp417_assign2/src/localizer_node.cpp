@@ -5,11 +5,14 @@
 #include <geometry_msgs/PoseStamped.h>
 #include <tf/transform_listener.h>
 #include <opencv2/opencv.hpp>
+#include <stdlib.h> //for rand
 
 #define METRE_TO_PIXEL_SCALE 50
 #define FORWARD_SWIM_SPEED_SCALING 0.1
 #define POSITION_GRAPHIC_RADIUS 20.0
 #define HEADING_GRAPHIC_LENGTH 50.0
+#define NUM_PARTICLES 2000
+#define RGB_DISTANCE 10
 using namespace std;
 // Class Localizer is a sample stub that you can build upon for your implementation
 // (advised but optional: starting from scratch is also fine)
@@ -17,6 +20,17 @@ using namespace std;
 class Localizer
 {
 public:
+  struct Particle
+  {
+    double x;
+    double y;
+    double theta;
+    double weight;
+  };
+
+  Particle Particles[NUM_PARTICLES];
+  Particle Valids[NUM_PARTICLES];
+  int NUM_VALIDS;
   ros::NodeHandle nh;
   image_transport::Publisher pub;
   image_transport::Subscriber gt_img_sub;
@@ -41,7 +55,12 @@ public:
 
     localization_result_image = map_image.clone();
     ground_truth_image = map_image.clone();
-
+    //=========================Initialize first valid point=========================
+    Valids[0].x = 400;
+    Valids[0].y = 1250;
+    Valids[0].weight = 0.1;
+    NUM_VALIDS = 1;
+    //==================================================================================
     gt_img_sub = it.subscribe("/assign2/ground_truth_image", 1, &Localizer::groundTruthImageCallback, this);
     robot_img_sub = it.subscribe("/aqua/back_down/image_raw", 1, &Localizer::robotImageCallback, this);
     motion_command_sub = nh.subscribe<geometry_msgs::PoseStamped>("/aqua/target_pose", 1, &Localizer::motionCommandCallback, this);
@@ -49,33 +68,66 @@ public:
     ROS_INFO( "localizer node constructed and subscribed." );
 
   }
-
+  void filter (float range){
+    //disperse the particles
+    for (int i =0;i<NUM_PARTICLES;i++){
+      int s = rand() %NUM_VALIDS -1;//take a random valid particle
+      //Eject the particle into a random area not too far away from a valid particle
+      Particles[i].x = rand()%((int)(1/Valids[s].weight*range)+(int)Valids[s].x)+Valids[s].x;
+      Particles[i].y = rand()%((int)(1/Valids[s].weight*range)+(int)Valids[s].y)+Valids[s].y;
+    }
+    int t=0;
+    //Prune bad particles
+    for (int i = 0; i < NUM_PARTICLES; i++) {
+      if (check(Particles[i])){
+        Valids[t]=Particles[i];
+        t++;
+      }
+    }
+    while (t<NUM_PARTICLES){
+      clear (Valids[t]);
+    }
+  }
+  void clear (Particle p){
+    p.x = p.y = p.theta = 0;
+    p.weight=1;
+  }
+  bool check (Particle& p){
+    return true;//TODO
+  }
     // Compare two images by getting the L2 error (square-root of sum of squared error).
   double getSimilarity( const cv::Mat A, const cv::Mat B ) {
-  if ( A.rows > 0 && A.rows == B.rows && A.cols > 0 && A.cols == B.cols ) {
-      // Calculate the L2 relative error between images.
-      double errorL2 = norm( A, B, CV_L2 );
-      // Convert to a reasonable scale, since L2 error is summed across all pixels of the image.
-      double similarity = errorL2 / (double)( A.rows * A.cols );
-      return similarity;
+    if ( A.rows > 0 && A.rows == B.rows && A.cols > 0 && A.cols == B.cols ) {
+        // Calculate the L2 relative error between images.
+        double errorL2 = norm( A, B, CV_L2 );
+        // Convert to a reasonable scale, since L2 error is summed across all pixels of the image.
+        double similarity = errorL2 / (double)( A.rows * A.cols );
+        return similarity;
+    }
+    else {
+        //Images have a different size
+        return 100000000.0;  // Return a bad value
+    }
   }
-  else {
-      //Images have a different size
-      return 100000000.0;  // Return a bad value
+  void draw_point(int x, int y){
+    double radius = 5.0;
+    cv::circle(localization_result_image, cv::Point(x, y), radius, CV_RGB(0,250,0), -1);
   }
-}
 
+  // Compare two pixels by returning the distance from the rgb
+  double comparePixels( const cv::Vec3b A, const cv::Vec3b B) {
+    double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
+    return ret;
+  }
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )
   {
 
     cv::Mat rgb_img = cv_bridge::toCvShare(robot_img, "bgr8")->image;
-    //  cout << "R (default) = " << endl <<        rgb_img          << endl << endl;
+
 
     cv::Size s = rgb_img.size();
     int rows = s.height;
     int cols = s.width;
-    //cv::Point* pt = new cv::Point(200,200);
-    //rgb_img.at(pt);
     cv::Vec3b pixel = rgb_img.at<cv::Vec3b>(200,200);
 
     printf("The RGB of the middle pixel is : (%d,%d,%d)\n", pixel[0],pixel[1],pixel[2]);
