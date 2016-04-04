@@ -6,6 +6,7 @@
 #include <tf/transform_listener.h>
 #include <opencv2/opencv.hpp>
 #include <stdlib.h> //for rand
+ #include <vector>
 
 #define METRE_TO_PIXEL_SCALE 50
 #define FORWARD_SWIM_SPEED_SCALING 0.1
@@ -27,10 +28,13 @@ public:
     double theta;
     double weight;
   };
-
-  Particle Particles[NUM_PARTICLES];
-  Particle Valids[NUM_PARTICLES];
-  int NUM_VALIDS;
+  size_t size = 2000;
+  std::vector<Particle> Particles;
+  std::vector<Particle> Valids;
+    // Particle Particles[NUM_PARTICLES];
+    // Particle Valids[NUM_PARTICLES];
+  int NumValids;
+  bool debug;
   ros::NodeHandle nh;
   image_transport::Publisher pub;
   image_transport::Subscriber gt_img_sub;
@@ -55,11 +59,22 @@ public:
 
     localization_result_image = map_image.clone();
     ground_truth_image = map_image.clone();
+    debug=true;
+
+    Particle p = {
+      5,//x
+      5,//y
+      5,//t
+      1,   //w
+    };
+    vector<Particle> temp(2000,p);
+    Particles = temp;
+    Valids =temp;
     //=========================Initialize first valid point=========================
     Valids[0].x = 400;
     Valids[0].y = 1250;
-    Valids[0].weight = 0.1;
-    NUM_VALIDS = 1;
+    Valids[0].weight = 1;
+    NumValids = 1;
     //==================================================================================
     gt_img_sub = it.subscribe("/assign2/ground_truth_image", 1, &Localizer::groundTruthImageCallback, this);
     robot_img_sub = it.subscribe("/aqua/back_down/image_raw", 1, &Localizer::robotImageCallback, this);
@@ -68,32 +83,54 @@ public:
     ROS_INFO( "localizer node constructed and subscribed." );
 
   }
-  void filter (float range){
+  void filter (float range,const cv::Vec3b centerPixelRobo){
     //disperse the particles
     for (int i =0;i<NUM_PARTICLES;i++){
-      int s = rand() %NUM_VALIDS -1;//take a random valid particle
+      int s = rand() %NumValids ;//take a random valid particle
       //Eject the particle into a random area not too far away from a valid particle
-      Particles[i].x = rand()%((int)(1/Valids[s].weight*range)+(int)Valids[s].x)+Valids[s].x;
-      Particles[i].y = rand()%((int)(1/Valids[s].weight*range)+(int)Valids[s].y)+Valids[s].y;
+      if (debug){ROS_INFO( "Line 77." );}
+      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
+      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
+      ROS_INFO( "S: %d Range: %f (1/Valids[s].weight): %f Valids[s].x: %d." ,s,range,(int)(1/Valids[s].weight)*range,(int)Valids[s].x);
+      ROS_INFO( "Particle [%d]: x:%f y:%f", i,Particles[i].x,Particles[i].y );
     }
     int t=0;
     //Prune bad particles
     for (int i = 0; i < NUM_PARTICLES; i++) {
-      if (check(Particles[i])){
+      if (debug){ROS_INFO( "Line 83." );}
+      if (check(Particles[i],centerPixelRobo)){
+        if (debug){ROS_INFO( "Line 85." );}
         Valids[t]=Particles[i];
         t++;
       }
     }
-    while (t<NUM_PARTICLES){
-      clear (Valids[t]);
-    }
+    NumValids = t; //retain the number of valids
+    // while (t<NUM_PARTICLES){
+    //   clear (Valids[t]);
+    // }
   }
   void clear (Particle p){
-    p.x = p.y = p.theta = 0;
+    if (debug){ROS_INFO( "Line 96." );}
+    p.x = p.y = p.theta = 5;
     p.weight=1;
   }
-  bool check (Particle& p){
-    return true;//TODO
+  //Assign weight to relevant particle
+  bool check (Particle p,cv::Vec3b centerPixelRobo){
+    if (debug){ROS_INFO( "Line 103." );}
+    //get the image at p
+    ROS_INFO( "p: x:%f y:%f w:%f", p.x, p.y, p.weight );
+    cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(9999999,99999999);
+    // cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(p.y,p.x);
+    if (debug){ROS_INFO( "Line 106." );}
+    float r = comparePixels(currentPixelMap, centerPixelRobo);
+    if (debug){ROS_INFO( "Line 108." );}
+    if (r<= RGB_DISTANCE){
+      if (debug){ROS_INFO( "Line 114." );}
+      p.weight = r;
+      draw_point(p.x,p.y);
+      return true;
+    };
+    return false;//
   }
     // Compare two images by getting the L2 error (square-root of sum of squared error).
   double getSimilarity( const cv::Mat A, const cv::Mat B ) {
@@ -116,7 +153,7 @@ public:
 
   // Compare two pixels by returning the distance from the rgb
   double comparePixels( const cv::Vec3b A, const cv::Vec3b B) {
-    double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
+    double ret = (double)pow(A[0]-B[0], 2) + (double)pow(A[1]-B[1], 2) + (double)pow(A[2]-B[2], 2);
     return ret;
   }
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )
@@ -124,14 +161,43 @@ public:
 
     cv::Mat rgb_img = cv_bridge::toCvShare(robot_img, "bgr8")->image;
 
-
     cv::Size s = rgb_img.size();
     int rows = s.height;
     int cols = s.width;
-    cv::Vec3b pixel = rgb_img.at<cv::Vec3b>(200,200);
+    cv::Vec3b centerPixelRobo = rgb_img.at<cv::Vec3b>(rows/2,cols/2);
 
-    printf("The RGB of the middle pixel is : (%d,%d,%d)\n", pixel[0],pixel[1],pixel[2]);
+    printf("The RGB of the middle pixel is : (%d,%d,%d)\n", centerPixelRobo[0],centerPixelRobo[1],centerPixelRobo[2]);
 
+
+    // // Find all "close enough" points
+    int t=0;
+    if (NumValids ==1){
+       for(int x = 0; x < map_image.cols; x++)
+       {
+         for(int y = 0; y < map_image.rows; y++)
+         {
+          //  if (debug){ROS_INFO("LINE 165");}
+          // Particle p = {
+          //   5,//x
+          //   5,//y
+          //   5,//t
+          //   1,   //w
+          // };
+           Particles[t].x=x;
+           Particles[t].y=y;
+           Particles[t].weight=1;
+          // Particles.push_back(p);
+           cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(y,x); // Image matrix -- use y then x
+           float s =comparePixels(currentPixelMap, centerPixelRobo);
+           if(s <= RGB_DISTANCE)
+           {
+             draw_point(x,y);
+             Particles[t].weight=s+1  ;
+           }
+         }
+       }
+     }
+     filter(20, centerPixelRobo);
     // TODO: You must fill in the code here to implement an observation model for your localizer
   }
 
