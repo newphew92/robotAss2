@@ -229,6 +229,10 @@ public:
   // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
   // and the others are in the particles_old variable
   void resample(){
+    std::default_random_engine generator;
+    std::normal_distribution<double> distribution(0.0,10.0);
+    std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
+    std::exponential_distribution<double> exp_distribution(0.05);
     std::sort(particles.begin(), particles.end(), compareByWeight);
     for (int i =0;i<NUM_PARTICLES;i++){
       particles_old[i] = particles [i];
