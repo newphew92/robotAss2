@@ -232,7 +232,22 @@ public:
     std::sort(particles.begin(), particles.end(), compareByWeight);
     for (int i =0;i<NUM_PARTICLES;i++){
       particles_old[i] = particles [i];
-
+      int index = (int) exp_distribution (generator);
+      
+      //Eject the particle into a random area not too far away from a valid particle
+      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
+      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
+      ROS_INFO( "--------------Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
+    }
+    for (int i =0;i<NUM_PARTICLES;i++){
+      // particles_old[i] = particles [i];
+      int index =  std::roundl(exp_distribution (generator));
+      particles [i] = particles_old [index];
+      particles[i].weight = 1;
+      particles[i].x = particles_old [index].x + std::roundl(distribution(generator));
+      particles[i].y = particles_old [index].y + std::roundl(distribution(generator));
+      particles[i].theta = angle_distribution(generator);
+      
       //Eject the particle into a random area not too far away from a valid particle
       // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
       // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
