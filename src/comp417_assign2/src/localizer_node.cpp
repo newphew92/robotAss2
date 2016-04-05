@@ -156,8 +156,7 @@ public:
   // list of these points and evenly distribute particles around all of the points, and that would create our initial state
   //
   // If you actually call this it works surpriginly well.
-  void kidnapped_find_similar()
-  {
+  void kidnapped_find_similar(){
     cv::Mat cam_image = current_camera_image.clone();
 
     int rows = cam_image.rows;
@@ -229,8 +228,16 @@ public:
   // Resamples new particles based on the weights of the current particles
   // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
   // and the others are in the particles_old variable
-  void resample()
-  {
+  void resample(){
+    std::sort(particles.begin(), particles.end(), compareByWeight);
+    for (int i =0;i<NUM_PARTICLES;i++){
+      particles_old[i] = particles [i];
+
+      //Eject the particle into a random area not too far away from a valid particle
+      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
+      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
+      ROS_INFO( "--------------Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
+    }
     // TODO: hue
   }
 
