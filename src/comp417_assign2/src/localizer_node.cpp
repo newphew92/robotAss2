@@ -13,9 +13,9 @@
 #define FORWARD_SWIM_SPEED_SCALING 0.1
 #define POSITION_GRAPHIC_RADIUS 20.0
 #define HEADING_GRAPHIC_LENGTH 50.0
-#define SPEED 10
+#define SPEED 2
 // My constants
-#define NUM_PARTICLES 5000
+#define NUM_PARTICLES 10000
 #define RGB_DISTANCE 20
 
 // Class Localizer is a sample stub that you can build upon for your implementation
@@ -73,7 +73,7 @@ std::default_random_engine generator;
 
     // Initialize particles around the origin
 
-    std::normal_distribution<double> distribution(0.0,50.0);
+    std::normal_distribution<double> distribution(0.0,100.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
     for(int i = 0; i < NUM_PARTICLES; i++){
@@ -126,7 +126,7 @@ std::default_random_engine generator;
   // Compare two pixels by returning the distance from the rgb
   double comparePixels( const cv::Vec3b A, const cv::Vec3b B )  {
     double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
-    return 1/(sqrt (ret)+1);
+    return (1/(sqrt (ret)+1));
 
 
   }
@@ -168,7 +168,7 @@ std::default_random_engine generator;
   }
   // Called by the motion callback
   // Assigns weights based on the last observed image
-  void updateObservation() // TODO: test to make sure weights are actually set -- struct madness
+  void updateObservation(double guessX, double guessY) // TODO: test to make sure weights are actually set -- struct madness
   {
     cv::Mat cam_image = current_camera_image.clone();
     //
@@ -181,9 +181,13 @@ std::default_random_engine generator;
     {
       // Get the current pixel of the particle and compare it with the read pixel in the camera
       cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); // Image matrix -- use y then x
-      double pixeldiff = comparePixels(currentPixelMap, centerPixelRobo);
+      double pixeldiff = 2*comparePixels(currentPixelMap, centerPixelRobo);
       // Assign weights based on how well it matches
-      particles[i].weight = pixeldiff;
+      // particles[i].weight = pixeldiff;
+      double posX = 1-1/(estimated_x_pixels - particles[i].x -guessX + 1);
+      double posY = 1-1/(estimated_y_pixels - particles[i].y - guessY + 1);
+
+      particles[i].weight = pixeldiff - 2*posX - 2*posY;
       // ROS_INFO("Updated weights: %f", pixeldiff);
       // if(pixeldiff <= RGB_DISTANCE) particles[i].weight = 1;
       // else if(pixeldiff <= RGB_DISTANCE * 10) particles[i].weight = 0.5;
@@ -198,7 +202,7 @@ std::default_random_engine generator;
     // ROS_INFO("Line 223");
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
-    std::exponential_distribution<double> exp_distribution(0.05);
+    std::exponential_distribution<double> exp_distribution(0.025);
     // estimated_location.pose.position.x;
     // estimated_location.pose.position.y;
     // estimated_location.pose.orientation;
@@ -239,6 +243,20 @@ std::default_random_engine generator;
     // TODO: hue
   }
 
+  void belief(){
+    int count = 10;
+    int inc = particles[0].x;
+    for (size_t i = 1; i < count; i++) {
+      inc +=particles[i].x;
+    }
+    estimated_x_pixels = inc/count;
+    inc = particles[0].y;
+    for (size_t i = 1; i < count; i++) {
+      inc +=particles[i].y;
+    }
+    estimated_y_pixels = inc/count;
+  }
+
   // Propagates the pixels based on the estimated_x_pixels and estimated_robo_image_y pixels
   void propagate()
   {
@@ -264,8 +282,11 @@ std::default_random_engine generator;
     estimated_location.pose.position.y = estimated_location.pose.position.y + FORWARD_SWIM_SPEED_SCALING * command.pose.position.x * sin( -target_yaw );
     estimated_location.pose.orientation = command.pose.orientation;
     //===============================Do the drawing===========================
-    updateObservation();
-    resample(FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw )*10, FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw )*10);
+    double guessX = FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw );
+    double guessY = FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw );
+    updateObservation(guessX, guessY);
+    resample(guessX, guessY);
+    belief();
     //=========================================================================
     // The remainder of this function is sample drawing code to plot your answer on the map image.
 
