@@ -15,8 +15,8 @@
 #define HEADING_GRAPHIC_LENGTH 50.0
 
 // My constants
-#define NUM_PARTICLES 25000
-#define RGB_DISTANCE 1
+#define NUM_PARTICLES 1000
+#define RGB_DISTANCE 20
 
 // Class Localizer is a sample stub that you can build upon for your implementation
 // (advised but optional: starting from scratch is also fine)
@@ -51,7 +51,7 @@ public:
   cv::Mat localization_result_image;
   cv::Mat localization_line_image; // Used so that we can refresh the particles each frame
 
-
+std::default_random_engine generator;
 
   Localizer( int argc, char** argv )
   {
@@ -72,7 +72,7 @@ public:
     estimated_y_pixels = adjust_y_meters(localization_line_image.size().height/2, 0);
 
     // Initialize particles around the origin
-    std::default_random_engine generator;
+
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
@@ -83,16 +83,6 @@ public:
       particles[i].theta = angle_distribution(generator);
       particles[i].weight = 1;
     }
-    // for(int i = 0; i < NUM_PARTICLES; i++){
-    //   particles.push_back(Particle());
-    //   old.push_back(Particle());
-    //   particles[i].x = rand()%map_image.cols;
-    //   particles[i].y = rand()%map_image.rows;
-    //   int temp = rand()%10;
-    //   double tempy = ((double)temp)/10.0;
-    //   ROS_INFO("temp: %f",tempy);
-    //   particles[i].weight = (tempy);
-    // }
 
     gt_img_sub = it.subscribe("/assign2/ground_truth_image", 1, &Localizer::groundTruthImageCallback, this);
     robot_img_sub = it.subscribe("/aqua/back_down/image_raw", 1, &Localizer::robotImageCallback, this);
@@ -113,33 +103,22 @@ public:
     for(int i = 0; i < NUM_PARTICLES; i++)
     {
       draw_point(particles[i].x, particles[i].y);
-      ROS_INFO( "Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
+      // ROS_INFO( "Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
     }
   }
   // Returns the x pixel coordinate adjusted for the length of the camera according to the provided yaw
   // x_pixels: the x location of the camera center, in pixels
   // returns: the x location of the center of the robot in pixels
-  int adjust_x_meters(double x_pixels, double yaw)
-  {
+  int adjust_x_meters(double x_pixels, double yaw){
     return x_pixels + std::roundl(METRE_TO_PIXEL_SCALE * cos( yaw ) * -0.32);
   }
   // Returns the y pixel coordinate adjusted for the length of the camera according to the provided yaw
   // y_pixels: the y location of the camera center, in pixels
   // returns: the y location of the center of the robot in pixels
-  int adjust_y_meters(double y_pixels, double yaw)
-  {
+  int adjust_y_meters(double y_pixels, double yaw)  {
     return y_pixels + std::roundl(METRE_TO_PIXEL_SCALE * sin( -yaw ) * -0.32);
   }
-  void filter (){
-    std::sort(particles.begin(), particles.end(), compareByWeight);
-    for (int i =0;i<NUM_PARTICLES;i++){
 
-      //Eject the particle into a random area not too far away from a valid particle
-      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
-      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
-      ROS_INFO( "--------------Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
-    }
-  }
   bool static compareByWeight(const Particle &a, const Particle &b){
     return a.weight>b.weight;
   }
@@ -147,7 +126,9 @@ public:
   // Compare two pixels by returning the distance from the rgb
   double comparePixels( const cv::Vec3b A, const cv::Vec3b B )  {
     double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
-    return ret;
+    return 1/(sqrt (ret)+1);
+
+
   }
 
   // Intended to be used by the kidnapped robot problem before deciiding it would be too long to do in full -- need to work on the project.
@@ -180,48 +161,33 @@ public:
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )  {
     // TODO: You must fill in the code here to implement an observation model for your localizer
     //ROS_INFO( "Got image callback." );
-    draw_particles();
-    filter();
-    // localization_result_image = localization_line_image.clone();
-    //
-    // current_camera_image = cv_bridge::toCvShare(robot_img, "bgr8")->image;
-    // int rows = current_camera_image.rows;
-    // int cols = current_camera_image.cols;
-    // cv::Vec3b centerPixelRobo = current_camera_image.at<cv::Vec3b>(rows/2,cols/2);
-    //
-    // // Find all "close enough" points
-    //  for(int x = 0; x < map_image.cols; x++)
-    //  {
-    //    for(int y = 0; y < map_image.rows; y++)
-    //    {
-    //      cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(y,x); // Image matrix -- use y then x
-    //      if(comparePixels(currentPixelMap, centerPixelRobo) <= RGB_DISTANCE)
-    //      {
-    //        draw_point(x,y);
-    //      }
-    //    }
-    //  }
+    current_camera_image = cv_bridge::toCvShare(robot_img, "bgr8")->image;
+    // draw_particles();
+
+
   }
   // Called by the motion callback
   // Assigns weights based on the last observed image
   void updateObservation() // TODO: test to make sure weights are actually set -- struct madness
   {
     cv::Mat cam_image = current_camera_image.clone();
-
+    //
     int rows = cam_image.rows;
     int cols = cam_image.cols;
+    ROS_INFO("%d,%d",rows,cols);
+    assert(rows >= 0 && rows < 2520 && cols >= 0 && cols <= 800);
     cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
-
     for(int i = 0; i < NUM_PARTICLES; i++)
     {
       // Get the current pixel of the particle and compare it with the read pixel in the camera
       cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); // Image matrix -- use y then x
       double pixeldiff = comparePixels(currentPixelMap, centerPixelRobo);
-
       // Assign weights based on how well it matches
-      if(pixeldiff <= RGB_DISTANCE) particles[i].weight = 1;
-      else if(pixeldiff <= RGB_DISTANCE * 10) particles[i].weight = 0.5;
-      else particles[i].weight = 0;
+      particles[i].weight = pixeldiff;
+      // ROS_INFO("Updated weights: %f", pixeldiff);
+      // if(pixeldiff <= RGB_DISTANCE) particles[i].weight = 1;
+      // else if(pixeldiff <= RGB_DISTANCE * 10) particles[i].weight = 0.5;
+      // else particles[i].weight = 0.1;
     }
   }
 
@@ -229,20 +195,27 @@ public:
   // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
   // and the others are in the particles_old variable
   void resample(){
+    ROS_INFO("Line 223");
     std::default_random_engine generator;
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
+    // estimated_location.pose.position.x;
+    // estimated_location.pose.position.y;
+    // estimated_location.pose.orientation;
+    // updateObservation();
     std::sort(particles.begin(), particles.end(), compareByWeight);
-    for (int i =0;i<NUM_PARTICLES;i++){
-      particles_old[i] = particles [i];
-      int index = (int) exp_distribution (generator);
-      
-      //Eject the particle into a random area not too far away from a valid particle
-      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
-      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
-      ROS_INFO( "--------------Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
-    }
+    ROS_INFO ("Line 229");
+    // for (int i =0;i<NUM_PARTICLES;i++){
+    //   // ROS_INFO("Weight sort: %f", particles[i].weight);
+    //     ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
+    // }
+    copy(particles.begin(), particles.end(), std::back_inserter(particles_old));
+    int i = 0;
+    // ROS_INFO("Old weight was: %f", particles_old[index].weight);
+    ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
+    ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
+    localization_result_image = localization_line_image.clone();
     for (int i =0;i<NUM_PARTICLES;i++){
       // particles_old[i] = particles [i];
       int index =  std::roundl(exp_distribution (generator));
@@ -250,13 +223,17 @@ public:
       particles[i].weight = 1;
       particles[i].x = particles_old [index].x + std::roundl(distribution(generator));
       particles[i].y = particles_old [index].y + std::roundl(distribution(generator));
+      if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
+      ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );}
       particles[i].theta = angle_distribution(generator);
-      
+      draw_point(particles[i].x,particles[i].y);
       //Eject the particle into a random area not too far away from a valid particle
       // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
       // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
-      ROS_INFO( "--------------Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
+      // ROS_INFO("Old weight was: %f", particles_old[index].weight);
+      // ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f \n Latched to particle [%d]", i,particles[i].x,particles[i].y,particles[i].weight,index );
     }
+    draw_particles();
     // TODO: hue
   }
 
@@ -273,6 +250,9 @@ public:
   // The published image is the end result of the particles after step 3
   void motionCommandCallback(const geometry_msgs::PoseStamped::ConstPtr& motion_command )  {
     //ROS_INFO( "Got motion callback." );
+    updateObservation();
+    resample();
+    // draw_particles();
     geometry_msgs::PoseStamped command = *motion_command;
     double target_roll, target_pitch, target_yaw;
     tf::Quaternion target_orientation;
