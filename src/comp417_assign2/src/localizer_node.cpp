@@ -196,7 +196,6 @@ std::default_random_engine generator;
   // and the others are in the particles_old variable
   void resample(){
     ROS_INFO("Line 223");
-    std::default_random_engine generator;
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
