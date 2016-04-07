@@ -13,9 +13,9 @@
 #define FORWARD_SWIM_SPEED_SCALING 0.1
 #define POSITION_GRAPHIC_RADIUS 20.0
 #define HEADING_GRAPHIC_LENGTH 50.0
-
+#define SPEED 10
 // My constants
-#define NUM_PARTICLES 1000
+#define NUM_PARTICLES 5000
 #define RGB_DISTANCE 20
 
 // Class Localizer is a sample stub that you can build upon for your implementation
@@ -73,7 +73,7 @@ std::default_random_engine generator;
 
     // Initialize particles around the origin
 
-    std::normal_distribution<double> distribution(0.0,10.0);
+    std::normal_distribution<double> distribution(0.0,50.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
     for(int i = 0; i < NUM_PARTICLES; i++){
@@ -194,8 +194,8 @@ std::default_random_engine generator;
   // Resamples new particles based on the weights of the current particles
   // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
   // and the others are in the particles_old variable
-  void resample(){
-    ROS_INFO("Line 223");
+  void resample(double guessX, double guessY){
+    // ROS_INFO("Line 223");
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
     std::exponential_distribution<double> exp_distribution(0.05);
@@ -204,26 +204,29 @@ std::default_random_engine generator;
     // estimated_location.pose.orientation;
     // updateObservation();
     std::sort(particles.begin(), particles.end(), compareByWeight);
-    ROS_INFO ("Line 229");
+    // ROS_INFO ("Line 229");
     // for (int i =0;i<NUM_PARTICLES;i++){
     //   // ROS_INFO("Weight sort: %f", particles[i].weight);
     //     ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
     // }
-    copy(particles.begin(), particles.end(), std::back_inserter(particles_old));
+    // copy(particles.begin(), particles.end(), std::back_inserter(particles_old));
+    // particles_old.swap(particles);
+    std::vector<Particle> testOld (particles);
     int i = 0;
     // ROS_INFO("Old weight was: %f", particles_old[index].weight);
-    ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
-    ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
+    // ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
+    // ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
     localization_result_image = localization_line_image.clone();
     for (int i =0;i<NUM_PARTICLES;i++){
       // particles_old[i] = particles [i];
       int index =  std::roundl(exp_distribution (generator));
-      particles [i] = particles_old [index];
+      particles [i] = testOld [index];
       particles[i].weight = 1;
-      particles[i].x = particles_old [index].x + std::roundl(distribution(generator));
-      particles[i].y = particles_old [index].y + std::roundl(distribution(generator));
-      if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
-      ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );}
+      ROS_INFO("gessX: %f,guessY:%f", guessX, guessY);
+      particles[i].x = testOld [index].x + std::roundl(distribution(generator)) + (int)(SPEED*guessX);
+      particles[i].y = testOld [index].y + std::roundl(distribution(generator)) + (int)(SPEED*guessY);
+      // if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
+      ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
       particles[i].theta = angle_distribution(generator);
       draw_point(particles[i].x,particles[i].y);
       //Eject the particle into a random area not too far away from a valid particle
@@ -232,7 +235,7 @@ std::default_random_engine generator;
       // ROS_INFO("Old weight was: %f", particles_old[index].weight);
       // ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f \n Latched to particle [%d]", i,particles[i].x,particles[i].y,particles[i].weight,index );
     }
-    draw_particles();
+    // draw_particles();
     // TODO: hue
   }
 
@@ -249,8 +252,6 @@ std::default_random_engine generator;
   // The published image is the end result of the particles after step 3
   void motionCommandCallback(const geometry_msgs::PoseStamped::ConstPtr& motion_command )  {
     //ROS_INFO( "Got motion callback." );
-    updateObservation();
-    resample();
     // draw_particles();
     geometry_msgs::PoseStamped command = *motion_command;
     double target_roll, target_pitch, target_yaw;
@@ -262,7 +263,10 @@ std::default_random_engine generator;
     estimated_location.pose.position.x = estimated_location.pose.position.x + FORWARD_SWIM_SPEED_SCALING * command.pose.position.x * cos( -target_yaw );
     estimated_location.pose.position.y = estimated_location.pose.position.y + FORWARD_SWIM_SPEED_SCALING * command.pose.position.x * sin( -target_yaw );
     estimated_location.pose.orientation = command.pose.orientation;
-
+    //===============================Do the drawing===========================
+    updateObservation();
+    resample(FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw )*10, FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw )*10);
+    //=========================================================================
     // The remainder of this function is sample drawing code to plot your answer on the map image.
 
     /*********************************************************/
