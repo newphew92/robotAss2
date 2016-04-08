@@ -15,7 +15,7 @@
 #define HEADING_GRAPHIC_LENGTH 50.0
 #define SPEED 1
 // My constants
-#define NUM_PARTICLES 1000
+#define NUM_PARTICLES 10000
 #define RGB_DISTANCE 20
 
 // Class Localizer is a sample stub that you can build upon for your implementation
@@ -43,8 +43,8 @@ public:
   geometry_msgs::PoseStamped estimated_location;
   int estimatedXPixels;
   int estimatedYPixels;
-  bool needsToObserve; // Determines if the observation phase needs to happen
-
+  bool isKidnapped;
+  double decay;
   cv::Mat map_image;
   cv::Mat current_camera_image;
   cv::Mat ground_truth_image;
@@ -55,6 +55,9 @@ std::default_random_engine generator;
 
   Localizer( int argc, char** argv )
   {
+    //If you want to do the isKidnapped version, set isKidnapped to true
+    isKidnapped = true;
+    decay = 200.0;
     image_transport::ImageTransport it(nh);
     pub = it.advertise("/assign2/localization_result_image", 1);
     map_image = cv::imread(argv[1], CV_LOAD_IMAGE_COLOR);
@@ -116,23 +119,41 @@ std::default_random_engine generator;
   }
 
   void kidnapped(){
-    cv::Mat cam_image = current_camera_image.clone();
+    cv::Mat camImage = current_camera_image.clone();
 
-    int rows = cam_image.rows;
-    int cols = cam_image.cols;
-    cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
+    int rows = camImage.rows;
+    int cols = camImage.cols;
+    cv::Vec3b centerPixelRobo = camImage.at<cv::Vec3b>(rows/2,cols/2);
+    std::normal_distribution<double> angle_distribution(0.0,0.26);
     //new list of particles
     // Find all "close enough" points
-    std::vector<Particle> brute (particles)
+    std::vector<Particle> brute (particles);
     int i = 0;
     for(int x = 0; x < map_image.cols; x++)
     {
       for(int y = 0; y < map_image.rows; y++)
       {
+        if (i>NUM_PARTICLES){break;}
         cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(y,x); // Image matrix -- use y then x
-        brute[i].weight = comparePixels(currentPixelMap, centerPixelRobo);
+        if (comparePixels(currentPixelMap, centerPixelRobo)>1){
+            // brute.push_back(Particle());
+            // brute[i].x = x;
+            // brute[i].y = y;
+            // brute[i].theta = angle_distribution(generator);
+            // brute[i].weight = comparePixels(currentPixelMap, centerPixelRobo);
+            particles.push_back(Particle());
+            particles[i].x = x;
+            particles[i].y = y;
+            particles[i].theta = angle_distribution(generator);
+            particles[i].weight = comparePixels(currentPixelMap, centerPixelRobo);
+        }
+        i++;
       }
     }
+    std::sort(particles.begin(), particles.end(), compareByWeight);
+    estimatedXPixels = particles[0].x;
+    estimatedYPixels = particles[0].y;
+    belief(1000);
   }
 
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )  {
@@ -161,11 +182,11 @@ std::default_random_engine generator;
     }
   }
 
-  void resample(double guessX, double guessY){
+  void resample(double guessX, double guessY, double range, double pick,double speed){
     // ROS_INFO("Line 223");
-    std::normal_distribution<double> distribution(0.0,10.0);
+    std::normal_distribution<double> distribution(0.0,range);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
-    std::exponential_distribution<double> exp_distribution(0.1);
+    std::exponential_distribution<double> exp_distribution(pick);
 
     std::sort(particles.begin(), particles.end(), compareByWeight);
 
@@ -177,15 +198,45 @@ std::default_random_engine generator;
       int index =  std::roundl(exp_distribution (generator));
       particles [i] = testOld [index];
       particles[i].weight = 1;
-      particles[i].x = testOld [index].x + std::roundl(distribution(generator)) + (SPEED*guessX);
-      particles[i].y = testOld [index].y + std::roundl(distribution(generator)) + (SPEED*guessY);
+      double newX = testOld [index].x + std::roundl(distribution(generator)) + (speed*guessX);
+      double newY =  testOld [index].y + std::roundl(distribution(generator)) + (speed*guessY);
+      if (newX < 0){
+      particles[i].x = 100;}
+      else if (newX > 800) {
+        particles[i].x=700;
+      }
+      else{
+        particles[i].x = newX;
+      }
+      if (newY < 0){
+      particles[i].x = 100;}
+      else if (newY > 2500) {
+        particles[i].x=2400;
+      }
+      else{
+        particles[i].y = newY;
+      }
       particles[i].theta = angle_distribution(generator);
       draw_point(particles[i].x,particles[i].y);
     }
+    if (isKidnapped){
+      if (decayAdjust(100)<1){
+        decay+=5;
+      }
+      else if (decay>12){
+        decay-=1;
+      }
+    } else{
+    belief(2);}
   }
-
-  void belief(){
-    int count = 2;
+  double decayAdjust (int count){
+    double inc = particles[0].weight;
+    for (size_t i = 0; i < count; i++) {
+      inc += particles[i].weight;
+    }
+    return inc/count;
+  }
+  void belief(int count){
     int inc = particles[0].x;
     for (size_t i = 1; i < count; i++) {
       inc +=particles[i].x;
@@ -222,9 +273,16 @@ std::default_random_engine generator;
     double guessX = FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw )*METRE_TO_PIXEL_SCALE;
     double guessY = FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw )*METRE_TO_PIXEL_SCALE;
     // ROS_INFO ("GuessX: %f, GessY: %f",guessX, guessY);
-    updateObservation(guessX, guessY);
-    resample(guessX, guessY);
-    belief();
+    if (isKidnapped){
+      kidnapped();
+      updateObservation(guessX, guessY);
+      resample(guessX, guessY,decay,0.1,10);
+      if (decay>12.0){
+      decay-=0.25;}
+    }else{
+      updateObservation(guessX, guessY);
+      resample(guessX, guessY,12.0,0.1,1);
+    }
     //=========================================================================
     // The remainder of this function is sample drawing code to plot your answer on the map image.
 
