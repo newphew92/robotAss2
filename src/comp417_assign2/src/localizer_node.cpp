@@ -13,9 +13,9 @@
 #define FORWARD_SWIM_SPEED_SCALING 0.1
 #define POSITION_GRAPHIC_RADIUS 20.0
 #define HEADING_GRAPHIC_LENGTH 50.0
-#define SPEED 2
+#define SPEED 1
 // My constants
-#define NUM_PARTICLES 10000
+#define NUM_PARTICLES 1000
 #define RGB_DISTANCE 20
 
 // Class Localizer is a sample stub that you can build upon for your implementation
@@ -73,9 +73,9 @@ std::default_random_engine generator;
 
     // Initialize particles around the origin
 
-    std::normal_distribution<double> distribution(0.0,100.0);
+    std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
-    std::exponential_distribution<double> exp_distribution(0.05);
+    std::exponential_distribution<double> exp_distribution(0.1);
     for(int i = 0; i < NUM_PARTICLES; i++){
       particles.push_back(Particle());
       particles[i].x = estimated_x_pixels + std::roundl(distribution(generator));
@@ -174,24 +174,19 @@ std::default_random_engine generator;
     //
     int rows = cam_image.rows;
     int cols = cam_image.cols;
-    ROS_INFO("%d,%d",rows,cols);
+    // ROS_INFO("%d,%d",rows,cols);
     assert(rows >= 0 && rows < 2520 && cols >= 0 && cols <= 800);
     cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
     for(int i = 0; i < NUM_PARTICLES; i++)
     {
       // Get the current pixel of the particle and compare it with the read pixel in the camera
       cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); // Image matrix -- use y then x
-      double pixeldiff = 2*comparePixels(currentPixelMap, centerPixelRobo);
-      // Assign weights based on how well it matches
-      // particles[i].weight = pixeldiff;
-      double posX = 1-1/(estimated_x_pixels - particles[i].x -guessX + 1);
-      double posY = 1-1/(estimated_y_pixels - particles[i].y - guessY + 1);
+      double pixeldiff = comparePixels(currentPixelMap, centerPixelRobo);
 
-      particles[i].weight = pixeldiff - 2*posX - 2*posY;
-      // ROS_INFO("Updated weights: %f", pixeldiff);
-      // if(pixeldiff <= RGB_DISTANCE) particles[i].weight = 1;
-      // else if(pixeldiff <= RGB_DISTANCE * 10) particles[i].weight = 0.5;
-      // else particles[i].weight = 0.1;
+      double posX = 1-1/2*(std::abs(estimated_x_pixels - particles[i].x -guessX + 1));
+      double posY = 1-1/2*(std::abs(estimated_y_pixels - particles[i].y - guessY + 1));
+
+      particles[i].weight = pixeldiff*0.9 +posX + posY;
     }
   }
 
@@ -202,19 +197,10 @@ std::default_random_engine generator;
     // ROS_INFO("Line 223");
     std::normal_distribution<double> distribution(0.0,10.0);
     std::normal_distribution<double> angle_distribution(0.0,0.26); //-15 to +15 degrees
-    std::exponential_distribution<double> exp_distribution(0.025);
-    // estimated_location.pose.position.x;
-    // estimated_location.pose.position.y;
-    // estimated_location.pose.orientation;
-    // updateObservation();
+    std::exponential_distribution<double> exp_distribution(0.1);
+
     std::sort(particles.begin(), particles.end(), compareByWeight);
-    // ROS_INFO ("Line 229");
-    // for (int i =0;i<NUM_PARTICLES;i++){
-    //   // ROS_INFO("Weight sort: %f", particles[i].weight);
-    //     ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
-    // }
-    // copy(particles.begin(), particles.end(), std::back_inserter(particles_old));
-    // particles_old.swap(particles);
+
     std::vector<Particle> testOld (particles);
     int i = 0;
     // ROS_INFO("Old weight was: %f", particles_old[index].weight);
@@ -226,11 +212,11 @@ std::default_random_engine generator;
       int index =  std::roundl(exp_distribution (generator));
       particles [i] = testOld [index];
       particles[i].weight = 1;
-      ROS_INFO("gessX: %f,guessY:%f", guessX, guessY);
-      particles[i].x = testOld [index].x + std::roundl(distribution(generator)) + (int)(SPEED*guessX);
-      particles[i].y = testOld [index].y + std::roundl(distribution(generator)) + (int)(SPEED*guessY);
+      // ROS_INFO("gessX: %f,guessY:%f", guessX, guessY);
+      particles[i].x = testOld [index].x + std::roundl(distribution(generator)) + (SPEED*guessX);
+      particles[i].y = testOld [index].y + std::roundl(distribution(generator)) + (SPEED*guessY);
       // if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
-      ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
+      // ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
       particles[i].theta = angle_distribution(generator);
       draw_point(particles[i].x,particles[i].y);
       //Eject the particle into a random area not too far away from a valid particle
@@ -244,7 +230,7 @@ std::default_random_engine generator;
   }
 
   void belief(){
-    int count = 10;
+    int count = 1;
     int inc = particles[0].x;
     for (size_t i = 1; i < count; i++) {
       inc +=particles[i].x;
@@ -255,6 +241,8 @@ std::default_random_engine generator;
       inc +=particles[i].y;
     }
     estimated_y_pixels = inc/count;
+    double radius = 15.0;
+    cv::circle(localization_result_image, cv::Point(estimated_x_pixels, estimated_y_pixels), radius, CV_RGB(250,0,250), -1);
   }
 
   // Propagates the pixels based on the estimated_x_pixels and estimated_robo_image_y pixels
@@ -282,8 +270,9 @@ std::default_random_engine generator;
     estimated_location.pose.position.y = estimated_location.pose.position.y + FORWARD_SWIM_SPEED_SCALING * command.pose.position.x * sin( -target_yaw );
     estimated_location.pose.orientation = command.pose.orientation;
     //===============================Do the drawing===========================
-    double guessX = FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw );
-    double guessY = FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw );
+    double guessX = FORWARD_SWIM_SPEED_SCALING * cos( -target_yaw )*METRE_TO_PIXEL_SCALE;
+    double guessY = FORWARD_SWIM_SPEED_SCALING *  sin( -target_yaw )*METRE_TO_PIXEL_SCALE;
+    // ROS_INFO ("GuessX: %f, GessY: %f",guessX, guessY);
     updateObservation(guessX, guessY);
     resample(guessX, guessY);
     belief();
