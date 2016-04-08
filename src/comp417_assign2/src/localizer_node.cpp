@@ -41,8 +41,8 @@ public:
 
   ros::Subscriber motion_command_sub;
   geometry_msgs::PoseStamped estimated_location;
-  int estimated_x_pixels;
-  int estimated_y_pixels;
+  int estimatedXPixels;
+  int estimatedYPixels;
   bool needsToObserve; // Determines if the observation phase needs to happen
 
   cv::Mat map_image;
@@ -68,8 +68,8 @@ std::default_random_engine generator;
     estimated_location.pose.position.x = 0;
     estimated_location.pose.position.y = 0;
 
-    estimated_x_pixels = adjust_x_meters(localization_line_image.size().width/2, 0);
-    estimated_y_pixels = adjust_y_meters(localization_line_image.size().height/2, 0);
+    estimatedXPixels = adjustXMeters(localization_line_image.size().width/2, 0);
+    estimatedYPixels = adjustYMeters(localization_line_image.size().height/2, 0);
 
     // Initialize particles around the origin
 
@@ -78,8 +78,8 @@ std::default_random_engine generator;
     std::exponential_distribution<double> exp_distribution(0.1);
     for(int i = 0; i < NUM_PARTICLES; i++){
       particles.push_back(Particle());
-      particles[i].x = estimated_x_pixels + std::roundl(distribution(generator));
-      particles[i].y = estimated_y_pixels + std::roundl(distribution(generator));
+      particles[i].x = estimatedXPixels + std::roundl(distribution(generator));
+      particles[i].y = estimatedYPixels + std::roundl(distribution(generator));
       particles[i].theta = angle_distribution(generator);
       particles[i].weight = 1;
     }
@@ -96,26 +96,13 @@ std::default_random_engine generator;
     double radius = 5.0;
     cv::circle(localization_result_image, cv::Point(x, y), radius, CV_RGB(0,250,0), -1);
   }
-
-  // duplicates the line image and draws the particles on the published image
-  void draw_particles()  {
-    localization_result_image = localization_line_image.clone();
-    for(int i = 0; i < NUM_PARTICLES; i++)
-    {
-      draw_point(particles[i].x, particles[i].y);
-      // ROS_INFO( "Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
-    }
-  }
-  // Returns the x pixel coordinate adjusted for the length of the camera according to the provided yaw
-  // x_pixels: the x location of the camera center, in pixels
-  // returns: the x location of the center of the robot in pixels
-  int adjust_x_meters(double x_pixels, double yaw){
+  // Returns the x/y pixel coordinate adjusted for the length of the camera according to the provided yaw
+  // x_pixels: the x/y location of the camera center, in pixels
+  // returns: the x/y location of the center of the robot in pixels
+  int adjustXMeters(double x_pixels, double yaw){
     return x_pixels + std::roundl(METRE_TO_PIXEL_SCALE * cos( yaw ) * -0.32);
   }
-  // Returns the y pixel coordinate adjusted for the length of the camera according to the provided yaw
-  // y_pixels: the y location of the camera center, in pixels
-  // returns: the y location of the center of the robot in pixels
-  int adjust_y_meters(double y_pixels, double yaw)  {
+  int adjustYMeters(double y_pixels, double yaw)  {
     return y_pixels + std::roundl(METRE_TO_PIXEL_SCALE * sin( -yaw ) * -0.32);
   }
 
@@ -123,52 +110,37 @@ std::default_random_engine generator;
     return a.weight>b.weight;
   }
 
-  // Compare two pixels by returning the distance from the rgb
   double comparePixels( const cv::Vec3b A, const cv::Vec3b B )  {
     double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
     return (1/(sqrt (ret)+1));
-
-
   }
 
-  // Intended to be used by the kidnapped robot problem before deciiding it would be too long to do in full -- need to work on the project.
-  // Basically instead of putting all of the particles around the start point like in the localization problem, we take the first scanned image
-  // and compare it to every pixel on the map and keep the most similar ones. Right now it just draws those points but the plan was to make a
-  // list of these points and evenly distribute particles around all of the points, and that would create our initial state
-  //
-  // If you actually call this it works surpriginly well.
-  void kidnapped_find_similar(){
+  void kidnapped(){
     cv::Mat cam_image = current_camera_image.clone();
 
     int rows = cam_image.rows;
     int cols = cam_image.cols;
     cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
-
+    //new list of particles
     // Find all "close enough" points
+    std::vector<Particle> brute (particles)
+    int i = 0;
     for(int x = 0; x < map_image.cols; x++)
     {
       for(int y = 0; y < map_image.rows; y++)
       {
         cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(y,x); // Image matrix -- use y then x
-        if(comparePixels(currentPixelMap, centerPixelRobo) <= RGB_DISTANCE)
-        {
-          draw_point(x,y);
-        }
+        brute[i].weight = comparePixels(currentPixelMap, centerPixelRobo);
       }
     }
   }
 
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )  {
-    // TODO: You must fill in the code here to implement an observation model for your localizer
-    //ROS_INFO( "Got image callback." );
     current_camera_image = cv_bridge::toCvShare(robot_img, "bgr8")->image;
-    // draw_particles();
-
-
   }
   // Called by the motion callback
   // Assigns weights based on the last observed image
-  void updateObservation(double guessX, double guessY) // TODO: test to make sure weights are actually set -- struct madness
+  void updateObservation(double guessX, double guessY)
   {
     cv::Mat cam_image = current_camera_image.clone();
     //
@@ -179,20 +151,16 @@ std::default_random_engine generator;
     cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
     for(int i = 0; i < NUM_PARTICLES; i++)
     {
-      // Get the current pixel of the particle and compare it with the read pixel in the camera
       cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); // Image matrix -- use y then x
       double pixeldiff = comparePixels(currentPixelMap, centerPixelRobo);
 
-      double posX = 1-1/2*(std::abs(estimated_x_pixels - particles[i].x -guessX + 1));
-      double posY = 1-1/2*(std::abs(estimated_y_pixels - particles[i].y - guessY + 1));
+      double posX = 1-1/2*(std::abs(estimatedXPixels - particles[i].x -guessX + 1));
+      double posY = 1-1/2*(std::abs(estimatedYPixels - particles[i].y - guessY + 1));
 
       particles[i].weight = pixeldiff*0.9 +posX + posY;
     }
   }
 
-  // Resamples new particles based on the weights of the current particles
-  // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
-  // and the others are in the particles_old variable
   void resample(double guessX, double guessY){
     // ROS_INFO("Line 223");
     std::normal_distribution<double> distribution(0.0,10.0);
@@ -203,52 +171,33 @@ std::default_random_engine generator;
 
     std::vector<Particle> testOld (particles);
     int i = 0;
-    // ROS_INFO("Old weight was: %f", particles_old[index].weight);
-    // ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
-    // ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
     localization_result_image = localization_line_image.clone();
     for (int i =0;i<NUM_PARTICLES;i++){
       // particles_old[i] = particles [i];
       int index =  std::roundl(exp_distribution (generator));
       particles [i] = testOld [index];
       particles[i].weight = 1;
-      // ROS_INFO("gessX: %f,guessY:%f", guessX, guessY);
       particles[i].x = testOld [index].x + std::roundl(distribution(generator)) + (SPEED*guessX);
       particles[i].y = testOld [index].y + std::roundl(distribution(generator)) + (SPEED*guessY);
-      // if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
-      // ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
       particles[i].theta = angle_distribution(generator);
       draw_point(particles[i].x,particles[i].y);
-      //Eject the particle into a random area not too far away from a valid particle
-      // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
-      // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
-      // ROS_INFO("Old weight was: %f", particles_old[index].weight);
-      // ROS_INFO( "--------------New Particle [%d]: x:%d y:%d w:%f \n Latched to particle [%d]", i,particles[i].x,particles[i].y,particles[i].weight,index );
     }
-    // draw_particles();
-    // TODO: hue
   }
 
   void belief(){
-    int count = 1;
+    int count = 2;
     int inc = particles[0].x;
     for (size_t i = 1; i < count; i++) {
       inc +=particles[i].x;
     }
-    estimated_x_pixels = inc/count;
+    estimatedXPixels = inc/(count);
     inc = particles[0].y;
     for (size_t i = 1; i < count; i++) {
       inc +=particles[i].y;
     }
-    estimated_y_pixels = inc/count;
+    estimatedYPixels = inc/(count);
     double radius = 15.0;
-    cv::circle(localization_result_image, cv::Point(estimated_x_pixels, estimated_y_pixels), radius, CV_RGB(250,0,250), -1);
-  }
-
-  // Propagates the pixels based on the estimated_x_pixels and estimated_robo_image_y pixels
-  void propagate()
-  {
-    // TODO
+    cv::circle(localization_result_image, cv::Point(estimatedXPixels, estimatedYPixels), radius, CV_RGB(250,0,250), -1);
   }
 
   // Where the entirety of the particle filter is applied. The following steps are done:
