@@ -106,15 +106,11 @@ std::default_random_engine generator;
       // ROS_INFO( "Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
     }
   }
-  // Returns the x pixel coordinate adjusted for the length of the camera according to the provided yaw
-  // x_pixels: the x location of the camera center, in pixels
-  // returns: the x location of the center of the robot in pixels
+
   int adjust_x_meters(double x_pixels, double yaw){
     return x_pixels + std::roundl(METRE_TO_PIXEL_SCALE * cos( yaw ) * -0.32);
   }
-  // Returns the y pixel coordinate adjusted for the length of the camera according to the provided yaw
-  // y_pixels: the y location of the camera center, in pixels
-  // returns: the y location of the center of the robot in pixels
+
   int adjust_y_meters(double y_pixels, double yaw)  {
     return y_pixels + std::roundl(METRE_TO_PIXEL_SCALE * sin( -yaw ) * -0.32);
   }
@@ -136,7 +132,7 @@ std::default_random_engine generator;
     // TODO: You must fill in the code here to implement an observation model for your localizer
     //ROS_INFO( "Got image callback." );
     current_camera_image = cv_bridge::toCvShare(robot_img, "bgr8")->image;
-    // draw_particles();
+
 
 
   }
