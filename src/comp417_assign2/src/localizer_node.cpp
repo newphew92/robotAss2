@@ -43,13 +43,13 @@ public:
   geometry_msgs::PoseStamped estimated_location;
   int estimated_x_pixels;
   int estimated_y_pixels;
-  bool needsToObserve; // Determines if the observation phase needs to happen
+
 
   cv::Mat map_image;
   cv::Mat current_camera_image;
   cv::Mat ground_truth_image;
   cv::Mat localization_result_image;
-  cv::Mat localization_line_image; // Used so that we can refresh the particles each frame
+  cv::Mat localization_line_image; 
 
 std::default_random_engine generator;
 
@@ -131,32 +131,6 @@ std::default_random_engine generator;
 
   }
 
-  // Intended to be used by the kidnapped robot problem before deciiding it would be too long to do in full -- need to work on the project.
-  // Basically instead of putting all of the particles around the start point like in the localization problem, we take the first scanned image
-  // and compare it to every pixel on the map and keep the most similar ones. Right now it just draws those points but the plan was to make a
-  // list of these points and evenly distribute particles around all of the points, and that would create our initial state
-  //
-  // If you actually call this it works surpriginly well.
-  void kidnapped_find_similar(){
-    cv::Mat cam_image = current_camera_image.clone();
-
-    int rows = cam_image.rows;
-    int cols = cam_image.cols;
-    cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
-
-    // Find all "close enough" points
-    for(int x = 0; x < map_image.cols; x++)
-    {
-      for(int y = 0; y < map_image.rows; y++)
-      {
-        cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(y,x); // Image matrix -- use y then x
-        if(comparePixels(currentPixelMap, centerPixelRobo) <= RGB_DISTANCE)
-        {
-          draw_point(x,y);
-        }
-      }
-    }
-  }
 
   void robotImageCallback( const sensor_msgs::ImageConstPtr& robot_img )  {
     // TODO: You must fill in the code here to implement an observation model for your localizer
@@ -168,7 +142,7 @@ std::default_random_engine generator;
   }
   // Called by the motion callback
   // Assigns weights based on the last observed image
-  void updateObservation(double guessX, double guessY) // TODO: test to make sure weights are actually set -- struct madness
+  void updateObservation(double guessX, double guessY)
   {
     cv::Mat cam_image = current_camera_image.clone();
     //
@@ -179,8 +153,8 @@ std::default_random_engine generator;
     cv::Vec3b centerPixelRobo = cam_image.at<cv::Vec3b>(rows/2,cols/2);
     for(int i = 0; i < NUM_PARTICLES; i++)
     {
-      // Get the current pixel of the particle and compare it with the read pixel in the camera
-      cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); // Image matrix -- use y then x
+      
+      cv::Vec3b currentPixelMap = map_image.at<cv::Vec3b>(particles[i].y, particles[i].x); 
       double pixeldiff = comparePixels(currentPixelMap, centerPixelRobo);
 
       double posX = 1-1/2*(std::abs(estimated_x_pixels - particles[i].x -guessX + 1));
@@ -191,8 +165,7 @@ std::default_random_engine generator;
   }
 
   // Resamples new particles based on the weights of the current particles
-  // Then it reorganizes the lists so that the particles placed particles have equal weights in the particles variable
-  // and the others are in the particles_old variable
+  
   void resample(double guessX, double guessY){
     // ROS_INFO("Line 223");
     std::normal_distribution<double> distribution(0.0,10.0);
@@ -245,11 +218,7 @@ std::default_random_engine generator;
     cv::circle(localization_result_image, cv::Point(estimated_x_pixels, estimated_y_pixels), radius, CV_RGB(250,0,250), -1);
   }
 
-  // Propagates the pixels based on the estimated_x_pixels and estimated_robo_image_y pixels
-  void propagate()
-  {
-    // TODO
-  }
+ 
 
   // Where the entirety of the particle filter is applied. The following steps are done:
   // 1) Update the observation model
