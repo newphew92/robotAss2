@@ -68,8 +68,8 @@ std::default_random_engine generator;
     estimated_location.pose.position.x = 0;
     estimated_location.pose.position.y = 0;
 
-    estimated_x_pixels = adjust_x_meters(localization_line_image.size().width/2, 0);
-    estimated_y_pixels = adjust_y_meters(localization_line_image.size().height/2, 0);
+    estimated_x_pixels = adjustX(localization_line_image.size().width/2, 0);
+    estimated_y_pixels = adjustY(localization_line_image.size().height/2, 0);
 
     // Initialize particles around the origin
 
@@ -91,27 +91,17 @@ std::default_random_engine generator;
     ROS_INFO("localizer node constructed and subscribed.");
   }
 
-  // mark a point
-  void draw_point(int x, int y){
+  void drawPoint(int x, int y){
     double radius = 5.0;
     cv::circle(localization_result_image, cv::Point(x, y), radius, CV_RGB(0,250,0), -1);
   }
 
-  // duplicates the line image and draws the particles on the published image
-  void draw_particles()  {
-    localization_result_image = localization_line_image.clone();
-    for(int i = 0; i < NUM_PARTICLES; i++)
-    {
-      draw_point(particles[i].x, particles[i].y);
-      // ROS_INFO( "Particle [%d]: x:%d y:%d w:%f", i,particles[i].x,particles[i].y,particles[i].weight );
-    }
-  }
 
-  int adjust_x_meters(double x_pixels, double yaw){
+  int adjustX(double x_pixels, double yaw){
     return x_pixels + std::roundl(METRE_TO_PIXEL_SCALE * cos( yaw ) * -0.32);
   }
 
-  int adjust_y_meters(double y_pixels, double yaw)  {
+  int adjustY(double y_pixels, double yaw)  {
     return y_pixels + std::roundl(METRE_TO_PIXEL_SCALE * sin( -yaw ) * -0.32);
   }
 
@@ -119,7 +109,7 @@ std::default_random_engine generator;
     return a.weight>b.weight;
   }
 
-  // Compare two pixels by returning the distance from the rgb
+  // Compare two pixels by returning the distance
   double comparePixels( const cv::Vec3b A, const cv::Vec3b B )  {
     double ret = pow(A[0]-B[0], 2) + pow(A[1]-B[1], 2) + pow(A[2]-B[2], 2);
     return (1/(sqrt (ret)+1));
@@ -187,7 +177,7 @@ std::default_random_engine generator;
       // if (i == 0){ROS_INFO( "--------------Old Particle [%d]: x:%d y:%d w:%f ", i,particles_old[i].x,particles_old[i].y,particles_old[i].weight );
       // ROS_INFO( "--------------Newer Particle [%d]: x:%d y:%d w:%f ", i,particles[i].x,particles[i].y,particles[i].weight );
       particles[i].theta = angle_distribution(generator);
-      draw_point(particles[i].x,particles[i].y);
+      drawPoint(particles[i].x,particles[i].y);
       //Eject the particle into a random area not too far away from a valid particle
       // Particles[i].x = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].x)+Valids[s].x;
       // Particles[i].y = rand()%(/*(int)((1/Valids[s].weight)*range)*/10+(int)Valids[s].y)+Valids[s].y;
